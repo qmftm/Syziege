@@ -37,6 +37,7 @@
   <h1>Syziege 지도</h1>
   <select id="world"></select>
   <div class="coords" id="coords">X: -, Z: -</div>
+  <div class="coords" id="zoom">확대: 100%</div>
   <div class="players" id="players"></div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -96,6 +97,15 @@
   map.on('mousemove', function (e) {
     coordsEl.textContent = 'X: ' + Math.floor(e.latlng.lng) + ', Z: ' + Math.floor(-e.latlng.lat);
   });
+
+  var zoomEl = document.getElementById('zoom');
+  function updateZoom() {
+    // Zoom 0 shows 1 block per pixel = 100%.
+    var pct = Math.pow(2, map.getZoom()) * 100;
+    zoomEl.textContent = '확대: ' + (pct >= 100 ? Math.round(pct) : pct.toFixed(1).replace(/\.0$/, '')) + '%';
+  }
+  map.on('zoomend', updateZoom);
+  map.whenReady(updateZoom);
 
   function refreshPlayers() {
     fetch('/api/players').then(function (r) { return r.json(); }).then(function (players) {

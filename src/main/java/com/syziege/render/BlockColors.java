@@ -14,7 +14,18 @@ public final class BlockColors {
     private static final Map<String, Integer> COLORS = new HashMap<>();
     private static final Map<String, Integer> RESOLVED = new ConcurrentHashMap<>();
 
-    public static final int WATER = 0xFF3F5FBF;
+    public static final int WATER = 0xFF3E6FC0;
+    public static final int WATER_SHALLOW = 0xFF4B87D8;
+    public static final int WATER_DEEP = 0xFF1F3F86;
+
+    /** Water surface color, shifting from shallow turquoise-blue to deep navy. */
+    public static int waterColor(int depth) {
+        double t = Math.min(1.0, depth / 24.0);
+        int r = (int) (((WATER_SHALLOW >> 16) & 0xFF) * (1 - t) + ((WATER_DEEP >> 16) & 0xFF) * t);
+        int g = (int) (((WATER_SHALLOW >> 8) & 0xFF) * (1 - t) + ((WATER_DEEP >> 8) & 0xFF) * t);
+        int b = (int) ((WATER_SHALLOW & 0xFF) * (1 - t) + (WATER_DEEP & 0xFF) * t);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
 
     private BlockColors() {
     }
@@ -27,20 +38,21 @@ public final class BlockColors {
 
     static {
         // Terrain
-        put(0x7FB238, "grass_block");
-        put(0x976C4A, "dirt", "coarse_dirt", "rooted_dirt", "farmland", "dirt_path");
+        put(0x8AB855, "grass_block");
+        put(0x9B6E4D, "dirt", "coarse_dirt", "rooted_dirt", "farmland", "dirt_path");
         put(0x5C4033, "podzol");
         put(0x4C6E4C, "mycelium");
-        put(0x707070, "stone", "cobblestone", "mossy_cobblestone", "stone_bricks", "infested_stone",
-                "smooth_stone", "andesite", "polished_andesite", "gravel");
-        put(0x8F8F8F, "diorite", "polished_diorite", "calcite");
-        put(0x9C6E51, "granite", "polished_granite");
+        put(0x8A8A85, "stone", "cobblestone", "mossy_cobblestone", "stone_bricks", "infested_stone",
+                "smooth_stone", "andesite", "polished_andesite");
+        put(0x7E7A72, "gravel");
+        put(0x9C9C97, "diorite", "polished_diorite", "calcite");
+        put(0xA3765C, "granite", "polished_granite");
         put(0x4A4A52, "deepslate", "cobbled_deepslate", "deepslate_bricks", "polished_deepslate", "tuff");
-        put(0xE7E0C8, "sand", "sandstone", "smooth_sandstone", "cut_sandstone");
+        put(0xE3D9A6, "sand", "sandstone", "smooth_sandstone", "cut_sandstone");
         put(0xBF6B33, "red_sand", "red_sandstone", "smooth_red_sandstone");
-        put(0x976C4A, "clay");
+        put(0x9B6E4D, "clay");
         put(0x9E7B5A, "terracotta");
-        put(0xFFFCF0, "snow", "snow_block", "powder_snow");
+        put(0xF5F8FA, "snow", "snow_block", "powder_snow");
         put(0x7DAFF0, "ice", "frosted_ice");
         put(0x5F8FD3, "packed_ice");
         put(0x4A6FD3, "blue_ice");
@@ -55,17 +67,17 @@ public final class BlockColors {
         put(0x8C6E5A, "dripstone_block", "pointed_dripstone");
 
         // Liquids
-        put(0x3F5FBF, "water", "bubble_column");
+        put(0x3E6FC0, "water", "bubble_column");
         put(0xD45A12, "lava");
 
         // Vegetation
-        put(0x4C8C2A, "oak_leaves", "jungle_leaves", "acacia_leaves", "mangrove_leaves",
+        put(0x5E8A3C, "oak_leaves", "jungle_leaves", "acacia_leaves", "mangrove_leaves",
                 "azalea_leaves", "flowering_azalea_leaves");
-        put(0x3A6B29, "spruce_leaves", "dark_oak_leaves");
-        put(0x6FA84C, "birch_leaves");
+        put(0x466E31, "spruce_leaves", "dark_oak_leaves");
+        put(0x77A04E, "birch_leaves");
         put(0xE87BB0, "cherry_leaves");
         put(0x9CBF57, "pale_oak_leaves");
-        put(0x5C9E31, "short_grass", "grass", "tall_grass", "fern", "large_fern");
+        put(0x6FA045, "short_grass", "grass", "tall_grass", "fern", "large_fern");
         put(0x2E8B57, "vine", "kelp", "kelp_plant", "seagrass", "tall_seagrass");
         put(0x2F7040, "cactus");
         put(0x8FBF4C, "sugar_cane", "bamboo");
@@ -143,10 +155,10 @@ public final class BlockColors {
         if (name.contains("water")) return WATER;
         if (name.contains("lava")) return 0xFFD45A12;
         if (name.contains("leaves") || name.contains("sapling") || name.contains("flower")
-                || name.contains("grass") || name.contains("bush")) return 0xFF4C8C2A;
-        if (name.contains("snow")) return 0xFFFFFCF0;
+                || name.contains("grass") || name.contains("bush")) return 0xFF5E8A3C;
+        if (name.contains("snow")) return 0xFFF5F8FA;
         if (name.contains("ice")) return 0xFF7DAFF0;
-        if (name.contains("sand")) return 0xFFE7E0C8;
+        if (name.contains("sand")) return 0xFFE3D9A6;
         if (name.contains("deepslate") || name.contains("blackstone") || name.contains("basalt")) return 0xFF4A4A52;
         if (name.contains("nether")) return 0xFF6E3533;
         if (name.contains("end_stone") || name.contains("purpur")) return 0xFFDEE0B8;
@@ -156,8 +168,8 @@ public final class BlockColors {
         if (name.contains("coral")) return 0xFFE87BB0;
         if (name.contains("ore") || name.contains("stone") || name.contains("cobble")
                 || name.contains("brick") || name.contains("slab") || name.contains("stairs")
-                || name.contains("wall")) return 0xFF707070;
-        if (name.contains("dirt") || name.contains("mud") || name.contains("soil")) return 0xFF976C4A;
+                || name.contains("wall")) return 0xFF8A8A85;
+        if (name.contains("dirt") || name.contains("mud") || name.contains("soil")) return 0xFF9B6E4D;
         if (name.contains("wool") || name.contains("concrete") || name.contains("carpet")) return 0xFFC0C0C8;
         return 0xFF7F7F87;
     }

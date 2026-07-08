@@ -82,8 +82,8 @@ public final class RegionRenderer {
                     }
                     String floor = chunk.blockAt(x, floorY, z);
                     int depth = y - floorY;
-                    double alpha = Math.min(0.85, 0.45 + depth * 0.03);
-                    argb = blend(BlockColors.colorFor(floor), BlockColors.WATER, alpha);
+                    double alpha = Math.min(0.88, 0.5 + depth * 0.035);
+                    argb = blend(BlockColors.colorFor(floor), BlockColors.waterColor(depth), alpha);
                     y = floorY; // shade by the sea floor so water looks flat
                 } else {
                     argb = BlockColors.colorFor(block);
@@ -105,22 +105,29 @@ public final class RegionRenderer {
         return Integer.MIN_VALUE;
     }
 
-    /** Brightens south-facing slopes and darkens north-facing ones (dynmap-style relief). */
+    /**
+     * Relief shading: south-facing slopes brighten and north-facing ones
+     * darken (dynmap-style), and overall brightness rises with altitude so
+     * lowlands read darker than peaks.
+     */
     private void applyShading(int[] colors, int[] heights) {
-        for (int z = TILE_SIZE - 1; z >= 1; z--) {
+        for (int z = TILE_SIZE - 1; z >= 0; z--) {
             for (int x = 0; x < TILE_SIZE; x++) {
                 int idx = z * TILE_SIZE + x;
                 int h = heights[idx];
-                int hn = heights[idx - TILE_SIZE];
-                if (h == Integer.MIN_VALUE || hn == Integer.MIN_VALUE) {
+                if (h == Integer.MIN_VALUE) {
                     continue;
                 }
-                int slope = h - hn;
-                if (slope == 0) {
-                    continue;
+                double factor = clamp(0.84 + (h - 64) * 0.0028, 0.72, 1.14);
+                if (z > 0) {
+                    int hn = heights[idx - TILE_SIZE];
+                    if (hn != Integer.MIN_VALUE) {
+                        factor *= clamp(1.0 + (h - hn) * 0.08, 0.72, 1.25);
+                    }
                 }
-                double factor = clamp(1.0 + slope * 0.08, 0.72, 1.25);
-                colors[idx] = scale(colors[idx], factor);
+                if (factor != 1.0) {
+                    colors[idx] = scale(colors[idx], clamp(factor, 0.6, 1.35));
+                }
             }
         }
     }
