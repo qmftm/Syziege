@@ -10,7 +10,7 @@ commands:
     description: Syziege admin command
     aliases: [szg]
     permission: syziege.admin
-    usage: /<command> <render|status> [world]
+    usage: /<command> <render|status|admin> [world]
 
 permissions:
   syziege.admin:

@@ -7,154 +7,97 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   html, body { height: 100%; margin: 0; }
-  #map { height: 100%; background: #1a1a22; }
+  #map { height: 100%; background: #12141b; }
   .panel {
-    position: absolute; top: 10px; right: 10px; z-index: 1000;
-    background: rgba(20, 20, 28, 0.85); color: #eee;
-    padding: 10px 12px; border-radius: 8px;
-    font-family: system-ui, sans-serif; font-size: 13px;
-    min-width: 160px;
+    position: absolute; z-index: 1000;
+    background: rgba(20, 22, 30, 0.88); color: #e8eaf0;
+    border: 1px solid #2a2e3a; border-radius: 10px;
+    padding: 12px 14px; backdrop-filter: blur(6px);
+    font-family: system-ui, -apple-system, sans-serif; font-size: 13px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.4);
   }
-  .panel h1 { margin: 0 0 8px; font-size: 15px; }
-  .panel select {
-    width: 100%; background: #2a2a34; color: #eee;
-    border: 1px solid #444; border-radius: 4px; padding: 4px;
+  #top { top: 10px; right: 10px; min-width: 190px; }
+  #top h1 { margin: 0 0 10px; font-size: 15px; letter-spacing: .02em; }
+  #top select {
+    width: 100%; background: #232733; color: #e8eaf0;
+    border: 1px solid #3a3f4e; border-radius: 6px; padding: 5px 8px; font: inherit;
   }
-  .panel .coords { margin-top: 8px; color: #aaa; font-variant-numeric: tabular-nums; }
-  .panel .players { margin-top: 8px; }
-  .panel .players div { padding: 1px 0; cursor: pointer; }
-  .panel .players div:hover { color: #ffd75e; }
-  .player-label {
-    background: rgba(20, 20, 28, 0.85); color: #fff;
-    border: none; box-shadow: none;
-    font-family: system-ui, sans-serif; font-size: 12px;
+  .row { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; }
+  .row .k { color: #8a90a0; }
+  .row .v { font-variant-numeric: tabular-nums; }
+  .clock { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .clock .icon { font-size: 20px; }
+  .clock .t { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .clock .d { color: #8a90a0; font-size: 12px; }
+  #players { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+  #players button {
+    all: unset; display: flex; justify-content: space-between; gap: 8px;
+    padding: 2px 4px; margin: 0 -4px; border-radius: 5px; cursor: pointer; font-size: 12.5px;
   }
+  #players button:hover { background: rgba(255,215,94,.12); color: #ffd75e; }
+  #players .pw { color: #6b7180; font-size: 11px; }
+  hr.sep { border: 0; border-top: 1px solid #2a2e3a; margin: 10px 0; }
+  .head { font-size: 11px; letter-spacing: .08em; color: #6b7180; text-transform: uppercase; }
+  #legend { bottom: 10px; left: 10px; max-width: 240px; }
+  #legend .item { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  #legend .sw { width: 13px; height: 13px; border-radius: 3px; flex: none; }
+  #legend .empty { color: #6b7180; }
+  .player-label { background: rgba(20,22,30,.85); color: #fff; border: none; box-shadow: none;
+    font-family: system-ui, sans-serif; font-size: 12px; }
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div class="panel">
+
+<div class="panel" id="top">
   <h1>Syziege 지도</h1>
-  <select id="world"></select>
-  <div class="coords" id="coords">X: -, Z: -</div>
-  <div class="coords" id="zoom">확대: 100%</div>
-  <div class="players" id="players"></div>
+  <select id="world" aria-label="월드 선택"></select>
+  <div class="clock">
+    <span class="icon" id="weatherIcon">☀️</span>
+    <span class="t" id="clock">--:--</span>
+    <span class="d" id="day"></span>
+  </div>
+  <div class="row"><span class="k">좌표</span><span class="v" id="coords">-, -</span></div>
+  <hr class="sep">
+  <div class="head" id="playersHead">접속자</div>
+  <div id="players"></div>
 </div>
+
+<div class="panel" id="legend">
+  <div class="head">지역</div>
+  <div id="legendItems"><div class="item empty">등록된 지역이 없습니다</div></div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="map-common.js"></script>
 <script>
 (function () {
   'use strict';
+  var app = SyziegeMap.create({ interactiveRegions: false });
 
-  var map = L.map('map', {
-    crs: L.CRS.Simple,
-    minZoom: -4,
-    maxZoom: 4,
-    zoomSnap: 0.5,
-    attributionControl: false
-  });
-
-  var tileLayer = null;
-  var currentWorld = null;
-  var playerMarkers = {};
-  var worldSelect = document.getElementById('world');
-  var coordsEl = document.getElementById('coords');
-  var playersEl = document.getElementById('players');
-
-  // Block (x, z) -> Leaflet latLng under CRS.Simple.
-  function toLatLng(x, z) { return L.latLng(-z, x); }
-
-  function setWorld(info) {
-    currentWorld = info.name;
-    if (tileLayer) { map.removeLayer(tileLayer); }
-    tileLayer = L.tileLayer('/tiles/' + encodeURIComponent(info.name) + '/{x}_{y}.png', {
-      tileSize: 512,
-      minNativeZoom: 0,
-      maxNativeZoom: 0,
-      noWrap: true
-    });
-    tileLayer.addTo(map);
-    map.setView(toLatLng(info.spawnX, info.spawnZ), 0);
-    Object.keys(playerMarkers).forEach(function (name) {
-      map.removeLayer(playerMarkers[name]);
-      delete playerMarkers[name];
-    });
+  // Weather + clock from /api/serverinfo.
+  function fmtTime(ticks) {
+    var mins = Math.floor(((ticks + 6000) % 24000) / 24000 * 1440);
+    var hh = String(Math.floor(mins / 60)).padStart(2, '0');
+    var mm = String(mins % 60).padStart(2, '0');
+    return hh + ':' + mm;
   }
-
-  fetch('/api/worlds').then(function (r) { return r.json(); }).then(function (worlds) {
-    worlds.forEach(function (w) {
-      var opt = document.createElement('option');
-      opt.value = w.name;
-      opt.textContent = w.name;
-      worldSelect.appendChild(opt);
-    });
-    worldSelect.onchange = function () {
-      var info = worlds.find(function (w) { return w.name === worldSelect.value; });
-      if (info) { setWorld(info); }
-    };
-    if (worlds.length > 0) { setWorld(worlds[0]); }
-  });
-
-  map.on('mousemove', function (e) {
-    coordsEl.textContent = 'X: ' + Math.floor(e.latlng.lng) + ', Z: ' + Math.floor(-e.latlng.lat);
-  });
-
-  var zoomEl = document.getElementById('zoom');
-  function updateZoom() {
-    // Zoom 0 shows 1 block per pixel = 100%.
-    var pct = Math.pow(2, map.getZoom()) * 100;
-    zoomEl.textContent = '확대: ' + (pct >= 100 ? Math.round(pct) : pct.toFixed(1).replace(/\.0$/, '')) + '%';
+  var WEATHER = { clear: '☀️', rain: '🌧️', thunder: '⛈️' };
+  function refreshInfo() {
+    fetch('/api/serverinfo').then(function (r) { return r.json(); }).then(function (list) {
+      var s = list.find(function (w) { return w.world === app.currentWorld(); });
+      if (!s) { return; }
+      var ticks = s.time;
+      var night = ticks >= 12300 && ticks <= 23850;
+      document.getElementById('clock').textContent = fmtTime(ticks);
+      document.getElementById('day').textContent = 'Day ' + s.day;
+      document.getElementById('weatherIcon').textContent =
+        (WEATHER[s.weather] || '☀️') + (night ? '🌙' : '');
+    }).catch(function () {});
   }
-  map.on('zoomend', updateZoom);
-  map.whenReady(updateZoom);
-
-  function refreshPlayers() {
-    fetch('/api/players').then(function (r) { return r.json(); }).then(function (players) {
-      var seen = {};
-      var listHtml = [];
-      players.forEach(function (p) {
-        listHtml.push(p);
-        if (p.world !== currentWorld) { return; }
-        seen[p.name] = true;
-        var pos = toLatLng(p.x, p.z);
-        if (playerMarkers[p.name]) {
-          playerMarkers[p.name].setLatLng(pos);
-        } else {
-          var marker = L.circleMarker(pos, {
-            radius: 6, color: '#fff', weight: 2, fillColor: '#e63946', fillOpacity: 1
-          }).bindTooltip(p.name, {
-            permanent: true, direction: 'right', offset: [8, 0], className: 'player-label'
-          });
-          marker.addTo(map);
-          playerMarkers[p.name] = marker;
-        }
-      });
-      Object.keys(playerMarkers).forEach(function (name) {
-        if (!seen[name]) {
-          map.removeLayer(playerMarkers[name]);
-          delete playerMarkers[name];
-        }
-      });
-      playersEl.innerHTML = '';
-      var header = document.createElement('div');
-      header.style.color = '#888';
-      header.textContent = '접속자 ' + listHtml.length + '명';
-      header.style.cursor = 'default';
-      playersEl.appendChild(header);
-      listHtml.forEach(function (p) {
-        var row = document.createElement('div');
-        row.textContent = p.name + ' (' + p.world + ')';
-        row.onclick = function () {
-          if (p.world === currentWorld) {
-            map.setView(toLatLng(p.x, p.z), Math.max(map.getZoom(), 0));
-          }
-        };
-        playersEl.appendChild(row);
-      });
-    }).catch(function () { /* server briefly unavailable; retry next tick */ });
-  }
-
-  refreshPlayers();
-  setInterval(refreshPlayers, 2000);
+  app.onWorldChange(refreshInfo);
+  refreshInfo();
+  setInterval(refreshInfo, 3000);
 })();
 </script>
 </body>

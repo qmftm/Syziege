@@ -32,9 +32,24 @@ public final class SyziegeCommand implements CommandExecutor, TabCompleter {
                 return handleRender(sender, args);
             case "status":
                 return handleStatus(sender);
+            case "admin":
+                return handleAdmin(sender);
             default:
                 return false;
         }
+    }
+
+    private boolean handleAdmin(CommandSender sender) {
+        if (plugin.adminKey() == null) {
+            sender.sendMessage("§c웹맵이 비활성화되어 있습니다.");
+            return true;
+        }
+        int port = plugin.getConfig().getInt("webmap.port", 8123);
+        sender.sendMessage("§6=== Syziege 관리자 지도 ===");
+        sender.sendMessage("§7주소: §fhttp://<서버주소>:" + port + "/admin");
+        sender.sendMessage("§7관리자 키: §e" + plugin.adminKey());
+        sender.sendMessage("§8이 키가 있어야 지역을 편집할 수 있습니다. 외부에 노출하지 마세요.");
+        return true;
     }
 
     private boolean handleRender(CommandSender sender, String[] args) {
@@ -90,7 +105,7 @@ public final class SyziegeCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return filter(Arrays.asList("render", "status"), args[0]);
+            return filter(Arrays.asList("render", "status", "admin"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("render") && plugin.worldRegistry() != null) {
             List<String> names = new ArrayList<>();
