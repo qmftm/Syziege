@@ -1,0 +1,18 @@
+name: Syziege
+version: '${project.version}'
+main: com.syziege.SyziegePlugin
+api-version: '1.18'
+description: Nation war plugin with a built-in web map viewer
+authors: [qmftm]
+
+commands:
+  syziege:
+    description: Syziege admin command
+    aliases: [szg]
+    permission: syziege.admin
+    usage: /<command> <render|status> [world]
+
+permissions:
+  syziege.admin:
+    description: Access to Syziege admin commands
+    default: op

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Syziege 지도</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  #map { height: 100%; background: #1a1a22; }
+  .panel {
+    position: absolute; top: 10px; right: 10px; z-index: 1000;
+    background: rgba(20, 20, 28, 0.85); color: #eee;
+    padding: 10px 12px; border-radius: 8px;
+    font-family: system-ui, sans-serif; font-size: 13px;
+    min-width: 160px;
+  }
+  .panel h1 { margin: 0 0 8px; font-size: 15px; }
+  .panel select {
+    width: 100%; background: #2a2a34; color: #eee;
+    border: 1px solid #444; border-radius: 4px; padding: 4px;
+  }
+  .panel .coords { margin-top: 8px; color: #aaa; font-variant-numeric: tabular-nums; }
+  .panel .players { margin-top: 8px; }
+  .panel .players div { padding: 1px 0; cursor: pointer; }
+  .panel .players div:hover { color: #ffd75e; }
+  .player-label {
+    background: rgba(20, 20, 28, 0.85); color: #fff;
+    border: none; box-shadow: none;
+    font-family: system-ui, sans-serif; font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <h1>Syziege 지도</h1>
+  <select id="world"></select>
+  <div class="coords" id="coords">X: -, Z: -</div>
+  <div class="players" id="players"></div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var map = L.map('map', {
+    crs: L.CRS.Simple,
+    minZoom: -4,
+    maxZoom: 4,
+    zoomSnap: 0.5,
+    attributionControl: false
+  });
+
+  var tileLayer = null;
+  var currentWorld = null;
+  var playerMarkers = {};
+  var worldSelect = document.getElementById('world');
+  var coordsEl = document.getElementById('coords');
+  var playersEl = document.getElementById('players');
+
+  // Block (x, z) -> Leaflet latLng under CRS.Simple.
+  function toLatLng(x, z) { return L.latLng(-z, x); }
+
+  function setWorld(info) {
+    currentWorld = info.name;
+    if (tileLayer) { map.removeLayer(tileLayer); }
+    tileLayer = L.tileLayer('/tiles/' + encodeURIComponent(info.name) + '/{x}_{y}.png', {
+      tileSize: 512,
+      minNativeZoom: 0,
+      maxNativeZoom: 0,
+      noWrap: true
+    });
+    tileLayer.addTo(map);
+    map.setView(toLatLng(info.spawnX, info.spawnZ), 0);
+    Object.keys(playerMarkers).forEach(function (name) {
+      map.removeLayer(playerMarkers[name]);
+      delete playerMarkers[name];
+    });
+  }
+
+  fetch('/api/worlds').then(function (r) { return r.json(); }).then(function (worlds) {
+    worlds.forEach(function (w) {
+      var opt = document.createElement('option');
+      opt.value = w.name;
+      opt.textContent = w.name;
+      worldSelect.appendChild(opt);
+    });
+    worldSelect.onchange = function () {
+      var info = worlds.find(function (w) { return w.name === worldSelect.value; });
+      if (info) { setWorld(info); }
+    };
+    if (worlds.length > 0) { setWorld(worlds[0]); }
+  });
+
+  map.on('mousemove', function (e) {
+    coordsEl.textContent = 'X: ' + Math.floor(e.latlng.lng) + ', Z: ' + Math.floor(-e.latlng.lat);
+  });
+
+  function refreshPlayers() {
+    fetch('/api/players').then(function (r) { return r.json(); }).then(function (players) {
+      var seen = {};
+      var listHtml = [];
+      players.forEach(function (p) {
+        listHtml.push(p);
+        if (p.world !== currentWorld) { return; }
+        seen[p.name] = true;
+        var pos = toLatLng(p.x, p.z);
+        if (playerMarkers[p.name]) {
+          playerMarkers[p.name].setLatLng(pos);
+        } else {
+          var marker = L.circleMarker(pos, {
+            radius: 6, color: '#fff', weight: 2, fillColor: '#e63946', fillOpacity: 1
+          }).bindTooltip(p.name, {
+            permanent: true, direction: 'right', offset: [8, 0], className: 'player-label'
+          });
+          marker.addTo(map);
+          playerMarkers[p.name] = marker;
+        }
+      });
+      Object.keys(playerMarkers).forEach(function (name) {
+        if (!seen[name]) {
+          map.removeLayer(playerMarkers[name]);
+          delete playerMarkers[name];
+        }
+      });
+      playersEl.innerHTML = '';
+      var header = document.createElement('div');
+      header.style.color = '#888';
+      header.textContent = '접속자 ' + listHtml.length + '명';
+      header.style.cursor = 'default';
+      playersEl.appendChild(header);
+      listHtml.forEach(function (p) {
+        var row = document.createElement('div');
+        row.textContent = p.name + ' (' + p.world + ')';
+        row.onclick = function () {
+          if (p.world === currentWorld) {
+            map.setView(toLatLng(p.x, p.z), Math.max(map.getZoom(), 0));
+          }
+        };
+        playersEl.appendChild(row);
+      });
+    }).catch(function () { /* server briefly unavailable; retry next tick */ });
+  }
+
+  refreshPlayers();
+  setInterval(refreshPlayers, 2000);
+})();
+</script>
+</body>
+</html>
