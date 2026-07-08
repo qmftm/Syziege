@@ -11,8 +11,16 @@ commands:
     aliases: [szg]
     permission: syziege.admin
     usage: /<command> <render|status|admin> [world]
+  국가:
+    description: 국가 관리 명령어
+    aliases: [nation, gukga]
+    permission: syziege.nation
+    usage: /<command> <생성|해체|초대|탈퇴|정보|목록>
 
 permissions:
   syziege.admin:
     description: Access to Syziege admin commands
     default: op
+  syziege.nation:
+    description: Use the nation commands
+    default: true

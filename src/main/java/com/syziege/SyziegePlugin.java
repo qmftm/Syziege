@@ -1,5 +1,8 @@
 package com.syziege;
 
+import com.syziege.nation.NationCommand;
+import com.syziege.nation.NationListener;
+import com.syziege.nation.NationStore;
 import com.syziege.region.RegionStore;
 import com.syziege.webmap.PlayerTracker;
 import com.syziege.webmap.ServerStateTracker;
@@ -25,12 +28,22 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
     private PlayerTracker playerTracker;
     private ServerStateTracker serverStateTracker;
     private RegionStore regionStore;
+    private NationStore nationStore;
     private WebServer webServer;
     private String adminKey;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+
+        // Nations work independently of the web map, so set them up first.
+        nationStore = new NationStore(
+                getDataFolder().toPath().resolve("nations.json"), getLogger());
+        nationStore.load();
+        NationCommand nationCommand = new NationCommand(nationStore);
+        getCommand("국가").setExecutor(nationCommand);
+        getCommand("국가").setTabCompleter(nationCommand);
+        Bukkit.getPluginManager().registerEvents(new NationListener(nationStore), this);
 
         if (!getConfig().getBoolean("webmap.enabled", true)) {
             getLogger().info("Web map is disabled in config.yml");
@@ -154,5 +167,9 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
 
     public String adminKey() {
         return adminKey;
+    }
+
+    public NationStore nationStore() {
+        return nationStore;
     }
 }
