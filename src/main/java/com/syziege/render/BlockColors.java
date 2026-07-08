@@ -202,4 +202,36 @@ public final class BlockColors {
                 return false;
         }
     }
+
+    /** Tint categories for biome-driven coloring. */
+    public static final int TINT_NONE = 0;
+    public static final int TINT_GRASS = 1;
+    public static final int TINT_FOLIAGE = 2;
+    public static final int TINT_WATER = 3;
+
+    /** Which biome tint (if any) should recolor this block. */
+    public static int tintType(String name) {
+        switch (name) {
+            case "grass_block":
+            case "short_grass":
+            case "grass":
+            case "tall_grass":
+            case "fern":
+            case "large_fern":
+            case "sugar_cane":
+            case "potted_fern":
+                return TINT_GRASS;
+            default:
+                break;
+        }
+        if (name.equals("vine") || name.equals("mangrove_leaves")
+                || (name.endsWith("_leaves") && !name.startsWith("cherry")
+                    && !name.startsWith("spruce") && !name.startsWith("birch"))) {
+            return TINT_FOLIAGE;
+        }
+        if (isWater(name)) {
+            return TINT_WATER;
+        }
+        return TINT_NONE;
+    }
 }

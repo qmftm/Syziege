@@ -10,20 +10,41 @@ import java.util.Arrays;
 
 /**
  * Renders one region file (32x32 chunks = 512x512 blocks) into a 512x512
- * top-down image, one pixel per block, with height-based hill shading.
+ * top-down image, one pixel per block. Grass, foliage and water are tinted
+ * by the chunk's biome data and blended across biome borders for smooth
+ * gradients, then shaded by terrain height and slope.
  */
 public final class RegionRenderer {
 
     public static final int TILE_SIZE = 512;
+    private static final int AREA = TILE_SIZE * TILE_SIZE;
+    /** Half-width, in blocks, of the biome color blend. */
+    private static final int BIOME_BLEND_RADIUS = 5;
+
+    /** Per-render scratch buffers, so a single renderer is safe across threads. */
+    private static final class Buffers {
+        final int[] colors = new int[AREA];
+        final int[] heights = new int[AREA];
+        final byte[] tintType = new byte[AREA];
+        final int[] grassTint = new int[AREA];
+        final int[] foliageTint = new int[AREA];
+        final int[] waterTint = new int[AREA];
+        final int[] waterFloor = new int[AREA];
+        final int[] waterDepth = new int[AREA];
+        final boolean[] filled = new boolean[AREA];
+        final int[] blurTmp = new int[AREA];
+
+        Buffers() {
+            Arrays.fill(heights, Integer.MIN_VALUE);
+        }
+    }
 
     /**
      * Renders the given region file. Returns null when the file contains
      * no renderable chunks.
      */
     public BufferedImage render(Path regionPath) throws IOException {
-        int[] colors = new int[TILE_SIZE * TILE_SIZE];
-        int[] heights = new int[TILE_SIZE * TILE_SIZE];
-        Arrays.fill(heights, Integer.MIN_VALUE);
+        Buffers b = new Buffers();
         boolean any = false;
 
         try (RegionFile region = new RegionFile(regionPath)) {
@@ -39,7 +60,7 @@ public final class RegionRenderer {
                         continue;
                     }
                     any = true;
-                    renderChunk(chunk, colors, heights, cx * 16, cz * 16);
+                    renderChunk(b, chunk, cx * 16, cz * 16);
                 }
             }
         }
@@ -48,14 +69,18 @@ public final class RegionRenderer {
             return null;
         }
 
-        applyShading(colors, heights);
+        blur(b, b.grassTint);
+        blur(b, b.foliageTint);
+        blur(b, b.waterTint);
+        combineTints(b);
+        applyShading(b);
 
         BufferedImage image = new BufferedImage(TILE_SIZE, TILE_SIZE, BufferedImage.TYPE_INT_ARGB);
-        image.setRGB(0, 0, TILE_SIZE, TILE_SIZE, colors, 0, TILE_SIZE);
+        image.setRGB(0, 0, TILE_SIZE, TILE_SIZE, b.colors, 0, TILE_SIZE);
         return image;
     }
 
-    private void renderChunk(ChunkColumn chunk, int[] colors, int[] heights, int pixelX, int pixelZ) {
+    private void renderChunk(Buffers b, ChunkColumn chunk, int pixelX, int pixelZ) {
         for (int z = 0; z < 16; z++) {
             for (int x = 0; x < 16; x++) {
                 int y = chunk.surfaceY(x, z);
@@ -74,24 +99,58 @@ public final class RegionRenderer {
                     continue;
                 }
 
-                int argb;
-                if (BlockColors.isWater(block)) {
+                int idx = (pixelZ + z) * TILE_SIZE + (pixelX + x);
+
+                // Biome tint fields are filled for every rendered pixel so the
+                // blur blends smoothly, even over blocks that aren't tinted.
+                BiomeColors.Tint tint = BiomeColors.tintFor(chunk.biomeAt(x, y, z));
+                b.grassTint[idx] = tint.grass;
+                b.foliageTint[idx] = tint.foliage;
+                b.waterTint[idx] = tint.water;
+
+                int type = BlockColors.tintType(block);
+                b.tintType[idx] = (byte) type;
+
+                if (type == BlockColors.TINT_WATER) {
                     int floorY = y;
                     while (floorY > chunk.minY() && BlockColors.isWater(chunk.blockAt(x, floorY, z))) {
                         floorY--;
                     }
-                    String floor = chunk.blockAt(x, floorY, z);
-                    int depth = y - floorY;
-                    double alpha = Math.min(0.88, 0.5 + depth * 0.035);
-                    argb = blend(BlockColors.colorFor(floor), BlockColors.waterColor(depth), alpha);
-                    y = floorY; // shade by the sea floor so water looks flat
-                } else {
-                    argb = BlockColors.colorFor(block);
+                    b.waterFloor[idx] = BlockColors.colorFor(chunk.blockAt(x, floorY, z));
+                    b.waterDepth[idx] = y - floorY;
+                    y = floorY; // shade water by the sea floor so it lies flat
+                } else if (type == BlockColors.TINT_NONE) {
+                    b.colors[idx] = BlockColors.colorFor(block);
                 }
 
-                int idx = (pixelZ + z) * TILE_SIZE + (pixelX + x);
-                colors[idx] = argb;
-                heights[idx] = y;
+                b.heights[idx] = y;
+                b.filled[idx] = true;
+            }
+        }
+    }
+
+    /** Resolves each tinted pixel to a final color once the biome fields are blurred. */
+    private void combineTints(Buffers b) {
+        for (int idx = 0; idx < AREA; idx++) {
+            if (!b.filled[idx]) {
+                continue;
+            }
+            switch (b.tintType[idx]) {
+                case BlockColors.TINT_GRASS:
+                    b.colors[idx] = 0xFF000000 | b.grassTint[idx];
+                    break;
+                case BlockColors.TINT_FOLIAGE:
+                    b.colors[idx] = 0xFF000000 | b.foliageTint[idx];
+                    break;
+                case BlockColors.TINT_WATER: {
+                    int depth = b.waterDepth[idx];
+                    int surface = scale(0xFF000000 | b.waterTint[idx], clamp(1.0 - depth * 0.02, 0.45, 1.0));
+                    double alpha = Math.min(0.9, 0.55 + depth * 0.03);
+                    b.colors[idx] = blend(b.waterFloor[idx], surface, alpha);
+                    break;
+                }
+                default:
+                    break; // TINT_NONE already has its color
             }
         }
     }
@@ -106,11 +165,69 @@ public final class RegionRenderer {
     }
 
     /**
+     * Masked separable box blur of an RGB field over rendered pixels only, so
+     * biome colors fade into each other without bleeding into empty chunks.
+     */
+    private void blur(Buffers b, int[] field) {
+        int r = BIOME_BLEND_RADIUS;
+        boolean[] filled = b.filled;
+        int[] tmp = b.blurTmp;
+        for (int z = 0; z < TILE_SIZE; z++) {
+            int rowBase = z * TILE_SIZE;
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int idx = rowBase + x;
+                if (!filled[idx]) {
+                    tmp[idx] = field[idx];
+                    continue;
+                }
+                int sr = 0, sg = 0, sb = 0, c = 0;
+                int lo = Math.max(0, x - r), hi = Math.min(TILE_SIZE - 1, x + r);
+                for (int xx = lo; xx <= hi; xx++) {
+                    int i = rowBase + xx;
+                    if (!filled[i]) {
+                        continue;
+                    }
+                    int v = field[i];
+                    sr += (v >> 16) & 0xFF;
+                    sg += (v >> 8) & 0xFF;
+                    sb += v & 0xFF;
+                    c++;
+                }
+                tmp[idx] = c == 0 ? field[idx] : ((sr / c) << 16) | ((sg / c) << 8) | (sb / c);
+            }
+        }
+        for (int x = 0; x < TILE_SIZE; x++) {
+            for (int z = 0; z < TILE_SIZE; z++) {
+                int idx = z * TILE_SIZE + x;
+                if (!filled[idx]) {
+                    field[idx] = tmp[idx];
+                    continue;
+                }
+                int sr = 0, sg = 0, sb = 0, c = 0;
+                int lo = Math.max(0, z - r), hi = Math.min(TILE_SIZE - 1, z + r);
+                for (int zz = lo; zz <= hi; zz++) {
+                    int i = zz * TILE_SIZE + x;
+                    if (!filled[i]) {
+                        continue;
+                    }
+                    int v = tmp[i];
+                    sr += (v >> 16) & 0xFF;
+                    sg += (v >> 8) & 0xFF;
+                    sb += v & 0xFF;
+                    c++;
+                }
+                field[idx] = c == 0 ? tmp[idx] : ((sr / c) << 16) | ((sg / c) << 8) | (sb / c);
+            }
+        }
+    }
+
+    /**
      * Relief shading: south-facing slopes brighten and north-facing ones
      * darken (dynmap-style), and overall brightness rises with altitude so
      * lowlands read darker than peaks.
      */
-    private void applyShading(int[] colors, int[] heights) {
+    private void applyShading(Buffers b) {
+        int[] heights = b.heights;
         for (int z = TILE_SIZE - 1; z >= 0; z--) {
             for (int x = 0; x < TILE_SIZE; x++) {
                 int idx = z * TILE_SIZE + x;
@@ -126,7 +243,7 @@ public final class RegionRenderer {
                     }
                 }
                 if (factor != 1.0) {
-                    colors[idx] = scale(colors[idx], clamp(factor, 0.6, 1.35));
+                    b.colors[idx] = scale(b.colors[idx], clamp(factor, 0.6, 1.35));
                 }
             }
         }

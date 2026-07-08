@@ -41,7 +41,37 @@ public final class ChunkColumn {
         }
     }
 
+    /** Biome palette for a 16-block section, at 4x4x4 (biome cell) resolution. */
+    private static final class BiomeSection {
+        final String[] palette;
+        final long[] data;
+        final int bits;
+
+        BiomeSection(String[] palette, long[] data) {
+            this.palette = palette;
+            this.data = data;
+            int b = 1;
+            while ((1 << b) < palette.length) {
+                b++;
+            }
+            this.bits = Math.max(1, b);
+        }
+
+        String biomeAt(int cx, int cy, int cz) {
+            if (data == null || palette.length == 1) {
+                return palette.length > 0 ? palette[0] : "plains";
+            }
+            int index = (cy << 4) | (cz << 2) | cx;
+            int perLong = 64 / bits;
+            long word = data[index / perLong];
+            int shift = (index % perLong) * bits;
+            int paletteIndex = (int) ((word >>> shift) & ((1L << bits) - 1));
+            return paletteIndex < palette.length ? palette[paletteIndex] : palette[0];
+        }
+    }
+
     private final Map<Integer, Section> sections = new HashMap<>();
+    private final Map<Integer, BiomeSection> biomes = new HashMap<>();
     private final long[] surfaceHeightmap;
     private final int heightmapBits;
     private final int minSectionY;
@@ -78,6 +108,19 @@ public final class ChunkColumn {
                 sections.put(y, new Section(palette, Nbt.getLongArray(blockStates, "data")));
                 minY = Math.min(minY, y);
                 maxY = Math.max(maxY, y);
+
+                Map<String, Object> biomeTag = Nbt.getCompound(sec, "biomes");
+                if (biomeTag != null) {
+                    List<Object> biomePalette = Nbt.getList(biomeTag, "palette");
+                    if (biomePalette != null && !biomePalette.isEmpty()) {
+                        String[] names = new String[biomePalette.size()];
+                        for (int i = 0; i < names.length; i++) {
+                            Object entry = biomePalette.get(i);
+                            names[i] = entry instanceof String ? stripNamespace((String) entry) : "plains";
+                        }
+                        biomes.put(y, new BiomeSection(names, Nbt.getLongArray(biomeTag, "data")));
+                    }
+                }
             }
         }
         this.minSectionY = minY == Integer.MAX_VALUE ? 0 : minY;
@@ -135,6 +178,15 @@ public final class ChunkColumn {
             return "air";
         }
         return section.blockAt(x & 15, y & 15, z & 15);
+    }
+
+    /** Biome name (namespace stripped) at chunk-local x/z and absolute y. */
+    public String biomeAt(int x, int y, int z) {
+        BiomeSection section = biomes.get(Math.floorDiv(y, 16));
+        if (section == null) {
+            return "plains";
+        }
+        return section.biomeAt((x & 15) >> 2, (y & 15) >> 2, (z & 15) >> 2);
     }
 
     /**
