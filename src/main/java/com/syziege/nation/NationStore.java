@@ -71,12 +71,24 @@ public final class NationStore {
         return new ArrayList<>(nations.values());
     }
 
+    private static final String[] PALETTE = {
+        "#e63946", "#3aa0ff", "#2fbf71", "#ffb703", "#9b5de5",
+        "#ff7b00", "#00b4d8", "#e8579a", "#8ac926", "#c1121f"
+    };
+
     public synchronized Nation create(String name, UUID leader, String leaderName) {
-        Nation nation = new Nation(name, leader, leaderName, System.currentTimeMillis());
+        Nation nation = new Nation(name, leader, leaderName, System.currentTimeMillis(),
+                PALETTE[nations.size() % PALETTE.length]);
         nations.put(key(name), nation);
         playerIndex.put(leader, key(name));
         save();
         return nation;
+    }
+
+    /** Sets a nation's territory color (hex #rrggbb) and persists. */
+    public synchronized void setColor(Nation nation, String color) {
+        nation.setColor(color);
+        save();
     }
 
     public synchronized void disband(Nation nation) {
@@ -146,6 +158,10 @@ public final class NationStore {
                 }
                 long createdAt = n.get("createdAt") instanceof Number
                         ? ((Number) n.get("createdAt")).longValue() : System.currentTimeMillis();
+                String color = string(n.get("color"));
+                if (color == null) {
+                    color = PALETTE[nations.size() % PALETTE.length];
+                }
 
                 String leaderName = leaderStr;
                 LinkedHashMap<UUID, String> members = new LinkedHashMap<>();
@@ -168,7 +184,7 @@ public final class NationStore {
                     }
                 }
 
-                Nation nation = new Nation(name, leader, leaderName, createdAt);
+                Nation nation = new Nation(name, leader, leaderName, createdAt, color);
                 nation.members().clear();
                 if (members.isEmpty()) {
                     nation.members().put(leader, leaderName);
@@ -208,6 +224,7 @@ public final class NationStore {
             sb.append("{\"name\":").append(str(nation.name()))
                     .append(",\"leader\":").append(str(nation.leader().toString()))
                     .append(",\"createdAt\":").append(nation.createdAt())
+                    .append(",\"color\":").append(str(nation.color()))
                     .append(",\"members\":[");
             boolean firstMember = true;
             for (Map.Entry<UUID, String> member : nation.members().entrySet()) {

@@ -13,18 +13,29 @@ public final class Nation {
     private final String name;
     private final UUID leader;
     private final long createdAt;
+    private String color;
     /** member UUID -> last known name, leader included. */
     private final LinkedHashMap<UUID, String> members = new LinkedHashMap<>();
 
-    public Nation(String name, UUID leader, String leaderName, long createdAt) {
+    public Nation(String name, UUID leader, String leaderName, long createdAt, String color) {
         this.name = name;
         this.leader = leader;
         this.createdAt = createdAt;
+        this.color = color;
         this.members.put(leader, leaderName);
     }
 
     public String name() {
         return name;
+    }
+
+    /** The nation's territory color (hex like #rrggbb). */
+    public String color() {
+        return color;
+    }
+
+    public void setColor(String color) {
+        this.color = color;
     }
 
     public UUID leader() {

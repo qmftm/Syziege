@@ -58,6 +58,8 @@ public final class NationCommand implements CommandExecutor, TabCompleter {
                 return info(sender, args);
             case "목록": case "list":
                 return list(sender);
+            case "색상": case "색": case "color":
+                return color(sender, args);
             case "수락": case "accept":
                 return accept(sender, args);
             case "거절": case "decline":
@@ -246,6 +248,38 @@ public final class NationCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean color(CommandSender sender, String[] args) {
+        Player player = asPlayer(sender);
+        if (player == null) {
+            return true;
+        }
+        Nation nation = store.byPlayer(player.getUniqueId());
+        if (nation == null || !nation.isLeader(player.getUniqueId())) {
+            send(sender, "§c국가장만 국가 색상을 바꿀 수 있습니다.");
+            return true;
+        }
+        if (args.length < 2) {
+            send(sender, "§c사용법: §f/국가 색상 <#RRGGBB> §7(예: /국가 색상 #3aa0ff)");
+            return true;
+        }
+        String color = normalizeHex(args[1]);
+        if (color == null) {
+            send(sender, "§c색상은 #RRGGBB 형식이어야 합니다. (예: #e63946)");
+            return true;
+        }
+        store.setColor(nation, color);
+        send(sender, "§a국가 색상을 §f" + color + "§a 으로 변경했습니다. 웹 지도의 영토에 반영됩니다.");
+        return true;
+    }
+
+    private static String normalizeHex(String input) {
+        String c = input.trim();
+        if (!c.startsWith("#")) {
+            c = "#" + c;
+        }
+        return c.matches("#[0-9a-fA-F]{6}") ? c.toLowerCase(Locale.ROOT) : null;
+    }
+
     private boolean list(CommandSender sender) {
         Player player = asPlayer(sender);
         if (player == null) {
@@ -315,6 +349,7 @@ public final class NationCommand implements CommandExecutor, TabCompleter {
         send(sender, "§e/국가 탈퇴 §7- 국가 탈퇴");
         send(sender, "§e/국가 정보 [국가] §7- 국가원 목록 보기");
         send(sender, "§e/국가 목록 §7- 전체 국가 목록");
+        send(sender, "§e/국가 색상 <#RRGGBB> §7- 국가 영토 색 변경 (국가장)");
     }
 
     private static void send(CommandSender sender, String legacy) {
@@ -324,7 +359,7 @@ public final class NationCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return filter(Arrays.asList("생성", "해체", "초대", "탈퇴", "정보", "목록"), args[0]);
+            return filter(Arrays.asList("생성", "해체", "초대", "탈퇴", "정보", "목록", "색상"), args[0]);
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase(Locale.ROOT);

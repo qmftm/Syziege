@@ -23,7 +23,8 @@ window.SyziegeMap = (function () {
     var playerMarkers = {};
     var worlds = [];
     var currentWorld = null;
-    var regionData = { types: [], claims: {} };
+    var regionData = { types: [], claims: {}, cores: {} };
+    var nationColors = {};
     var worldChangeCbs = [];
     var strokeCbs = [];
 
@@ -91,6 +92,15 @@ window.SyziegeMap = (function () {
       return t ? t.name : id;
     }
 
+    // A region is drawn in its owning nation's color; if unowned, its type color.
+    function fillColorForType(id) {
+      var core = (regionData.cores || {})[id];
+      if (core && core.owner && nationColors[core.owner]) {
+        return nationColors[core.owner];
+      }
+      return typeColor(id);
+    }
+
     function drawRegions() {
       regionFill.clearLayers();
       regionEdges.clearLayers();
@@ -100,7 +110,7 @@ window.SyziegeMap = (function () {
       chunks.forEach(function (c) { lookup[c.x + ',' + c.z] = c.type; });
 
       chunks.forEach(function (c) {
-        var color = typeColor(c.type);
+        var color = fillColorForType(c.type);
         L.rectangle(chunkBounds(c.x, c.z), {
           stroke: false, fillColor: color, fillOpacity: 0.35, interactive: false
         }).addTo(regionFill);
@@ -160,14 +170,20 @@ window.SyziegeMap = (function () {
     }
 
     function refreshRegions() {
-      return fetch('/api/regions').then(function (r) { return r.json(); }).then(function (data) {
-        regionData = data;
-        drawRegions();
-        return data;
+      var nationsReq = fetch('/api/nations').then(function (r) { return r.json(); }).then(function (list) {
+        nationColors = {};
+        list.forEach(function (n) { nationColors[n.name] = n.color; });
+      }).catch(function () {});
+      return Promise.resolve(nationsReq).then(function () {
+        return fetch('/api/regions').then(function (r) { return r.json(); }).then(function (data) {
+          regionData = data;
+          drawRegions();
+          return data;
+        });
       });
     }
     refreshRegions();
-    // Poll so ownership/health changes from capture combat show up live.
+    // Poll so ownership/health/color changes from capture combat show up live.
     setInterval(refreshRegions, 5000);
 
     /* ---------- players ---------- */

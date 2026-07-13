@@ -6,6 +6,7 @@ import com.syziege.nation.NationListener;
 import com.syziege.nation.NationStore;
 import com.syziege.region.RegionStore;
 import com.syziege.war.CoreCombatListener;
+import com.syziege.war.CoreEntityManager;
 import com.syziege.webmap.PlayerTracker;
 import com.syziege.webmap.ServerStateTracker;
 import com.syziege.webmap.TileService;
@@ -32,6 +33,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
     private ServerStateTracker serverStateTracker;
     private RegionStore regionStore;
     private NationStore nationStore;
+    private CoreEntityManager coreEntities;
     private CoreCombatListener coreCombat;
     private WebAuth webAuth;
     private WebServer webServer;
@@ -51,15 +53,17 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
                 getLogger());
         regionStore.load();
 
+        coreEntities = new CoreEntityManager(this, regionStore);
+
         NationCommand nationCommand = new NationCommand(nationStore);
         getCommand("국가").setExecutor(nationCommand);
         getCommand("국가").setTabCompleter(nationCommand);
-        AdminCommand adminCommand = new AdminCommand(nationStore, regionStore);
+        AdminCommand adminCommand = new AdminCommand(nationStore, regionStore, coreEntities);
         getCommand("admin").setExecutor(adminCommand);
         getCommand("admin").setTabCompleter(adminCommand);
         Bukkit.getPluginManager().registerEvents(new NationListener(nationStore), this);
 
-        coreCombat = new CoreCombatListener(this, regionStore, nationStore,
+        coreCombat = new CoreCombatListener(this, regionStore, nationStore, coreEntities,
                 getConfig().getInt("core.max-health", 100),
                 getConfig().getInt("core.damage-per-hit", 5),
                 getConfig().getLong("core.hit-cooldown-ms", 400),
@@ -68,6 +72,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
                 getConfig().getInt("core.regen-per-second", 2));
         Bukkit.getPluginManager().registerEvents(coreCombat, this);
         coreCombat.start();
+        coreEntities.start();
 
         if (!getConfig().getBoolean("webmap.enabled", true)) {
             getLogger().info("Web map is disabled in config.yml");
@@ -142,8 +147,12 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
             playerTracker = null;
         }
         if (coreCombat != null) {
-            coreCombat.stop(); // cancels regen task and flushes core health to disk
+            coreCombat.stop(); // cancels tick task, clears boss bars, flushes core health
             coreCombat = null;
+        }
+        if (coreEntities != null) {
+            coreEntities.stop(); // removes the core slimes
+            coreEntities = null;
         }
     }
 

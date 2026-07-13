@@ -148,6 +148,9 @@ public final class WebServer {
             case "/api/regions":
                 sendJson(exchange, 200, regions.toJson());
                 return;
+            case "/api/nations":
+                sendJson(exchange, 200, nationsJson());
+                return;
             case "/api/session":
                 serveSession(exchange);
                 return;
@@ -427,6 +430,22 @@ public final class WebServer {
             sb.append("{\"name\":").append(jsonString(world.name))
                     .append(",\"spawnX\":").append(world.spawnX)
                     .append(",\"spawnZ\":").append(world.spawnZ)
+                    .append('}');
+        }
+        return sb.append(']').toString();
+    }
+
+    private String nationsJson() {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (Nation nation : nations.all()) {
+            if (!first) {
+                sb.append(',');
+            }
+            first = false;
+            sb.append("{\"name\":").append(jsonString(nation.name()))
+                    .append(",\"color\":").append(jsonString(nation.color()))
+                    .append(",\"members\":").append(nation.size())
                     .append('}');
         }
         return sb.append(']').toString();
