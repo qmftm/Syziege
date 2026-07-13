@@ -166,6 +166,67 @@ public final class RegionStore {
         return cores.get(typeId);
     }
 
+    // ---- capture combat ----
+
+    /** The region type id whose core is at the given block, or null. */
+    public synchronized String coreAt(String world, int x, int y, int z) {
+        for (Map.Entry<String, Core> entry : cores.entrySet()) {
+            Core c = entry.getValue();
+            if (c.x == x && c.y == y && c.z == z && c.world.equals(world)) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    public synchronized List<String> coreTypeIds() {
+        return new ArrayList<>(cores.keySet());
+    }
+
+    /** Display name of a region type, or the id if unknown. */
+    public synchronized String typeName(String typeId) {
+        RegionType type = types.get(typeId);
+        return type == null ? typeId : type.name;
+    }
+
+    /** Reduces a core's health (in memory), returning the new value. */
+    public synchronized int damageCore(String typeId, int amount) {
+        Core core = cores.get(typeId);
+        if (core == null) {
+            return 0;
+        }
+        core.health = Math.max(0, core.health - amount);
+        return core.health;
+    }
+
+    /** Regenerates a core's health up to {@code max} (in memory). */
+    public synchronized int healCore(String typeId, int amount, int max) {
+        Core core = cores.get(typeId);
+        if (core == null) {
+            return 0;
+        }
+        core.health = Math.min(max, core.health + amount);
+        return core.health;
+    }
+
+    /** Transfers ownership and resets health, persisting the core file. */
+    public synchronized void captureCore(String typeId, String owner, int health) {
+        Core core = cores.get(typeId);
+        if (core == null) {
+            return;
+        }
+        core.owner = owner;
+        core.health = health;
+        saveCore(typeId);
+    }
+
+    /** Persists every core file (call on shutdown to flush in-memory health). */
+    public synchronized void saveAllCores() {
+        for (String typeId : cores.keySet()) {
+            saveCore(typeId);
+        }
+    }
+
     /** The region type id claiming the given chunk, or null. */
     public synchronized String claimAt(String world, int chunkX, int chunkZ) {
         Map<Long, String> worldClaims = claims.get(world);

@@ -116,6 +116,9 @@ window.SyziegeMap = (function () {
       Object.keys(cores).forEach(function (typeId) {
         var core = cores[typeId];
         if (core.world !== currentWorld) { return; }
+        var tip = typeName(typeId) + ' 점령 코어';
+        if (core.owner) { tip += ' · 소유: ' + core.owner; }
+        if (typeof core.health === 'number') { tip += ' · 체력 ' + core.health; }
         L.marker(toLatLng(core.x, core.z), {
           icon: L.divIcon({
             className: 'core-marker',
@@ -123,7 +126,7 @@ window.SyziegeMap = (function () {
             iconSize: [18, 18], iconAnchor: [9, 9]
           }),
           interactive: true
-        }).bindTooltip(typeName(typeId) + ' 점령 코어', { direction: 'top' }).addTo(coreLayer);
+        }).bindTooltip(tip, { direction: 'top' }).addTo(coreLayer);
       });
 
       updateLegend();
@@ -164,6 +167,8 @@ window.SyziegeMap = (function () {
       });
     }
     refreshRegions();
+    // Poll so ownership/health changes from capture combat show up live.
+    setInterval(refreshRegions, 5000);
 
     /* ---------- players ---------- */
 

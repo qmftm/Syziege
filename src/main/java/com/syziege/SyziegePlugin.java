@@ -5,6 +5,7 @@ import com.syziege.nation.NationCommand;
 import com.syziege.nation.NationListener;
 import com.syziege.nation.NationStore;
 import com.syziege.region.RegionStore;
+import com.syziege.war.CoreCombatListener;
 import com.syziege.webmap.PlayerTracker;
 import com.syziege.webmap.ServerStateTracker;
 import com.syziege.webmap.TileService;
@@ -31,6 +32,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
     private ServerStateTracker serverStateTracker;
     private RegionStore regionStore;
     private NationStore nationStore;
+    private CoreCombatListener coreCombat;
     private WebAuth webAuth;
     private WebServer webServer;
     private String adminKey;
@@ -56,6 +58,16 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
         getCommand("admin").setExecutor(adminCommand);
         getCommand("admin").setTabCompleter(adminCommand);
         Bukkit.getPluginManager().registerEvents(new NationListener(nationStore), this);
+
+        coreCombat = new CoreCombatListener(this, regionStore, nationStore,
+                getConfig().getInt("core.max-health", 100),
+                getConfig().getInt("core.damage-per-hit", 5),
+                getConfig().getLong("core.hit-cooldown-ms", 400),
+                getConfig().getBoolean("core.require-nation", true),
+                getConfig().getInt("core.regen-delay-seconds", 30),
+                getConfig().getInt("core.regen-per-second", 2));
+        Bukkit.getPluginManager().registerEvents(coreCombat, this);
+        coreCombat.start();
 
         if (!getConfig().getBoolean("webmap.enabled", true)) {
             getLogger().info("Web map is disabled in config.yml");
@@ -128,6 +140,10 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
         if (playerTracker != null) {
             playerTracker.stop();
             playerTracker = null;
+        }
+        if (coreCombat != null) {
+            coreCombat.stop(); // cancels regen task and flushes core health to disk
+            coreCombat = null;
         }
     }
 
