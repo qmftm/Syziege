@@ -213,11 +213,17 @@ public final class CoreCombatListener implements Listener {
             }
         }
 
+        // Nothing to regenerate or display unless a core was recently hit.
+        if (bars.isEmpty() && lastHit.isEmpty()) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
         for (String typeId : regions.coreTypeIds()) {
             RegionStore.Core core = regions.getCore(typeId);
             if (core == null) {
                 dropBar(typeId);
+                lastHit.remove(typeId);
                 continue;
             }
             Long last = lastHit.get(typeId);
@@ -225,6 +231,9 @@ public final class CoreCombatListener implements Listener {
             if (regenPerSecond > 0 && last != null && core.health < maxHealth
                     && now - last >= regenDelaySeconds * 1000L) {
                 regions.healCore(typeId, regenPerSecond, maxHealth);
+            }
+            if (last != null && core.health >= maxHealth) {
+                lastHit.remove(typeId); // fully healed; stop tracking
             }
 
             BossBar bar = bars.get(typeId);

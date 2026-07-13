@@ -169,18 +169,25 @@ window.SyziegeMap = (function () {
       });
     }
 
+    var lastRegionsText = null, lastNationsText = null;
     function refreshRegions() {
-      var nationsReq = fetch('/api/nations').then(function (r) { return r.json(); }).then(function (list) {
+      return Promise.all([
+        fetch('/api/nations').then(function (r) { return r.text(); }),
+        fetch('/api/regions').then(function (r) { return r.text(); })
+      ]).then(function (res) {
+        var nationsText = res[0], regionsText = res[1];
+        // Only rebuild the (potentially thousands of) overlay layers on change.
+        if (nationsText === lastNationsText && regionsText === lastRegionsText) {
+          return regionData;
+        }
+        lastNationsText = nationsText;
+        lastRegionsText = regionsText;
         nationColors = {};
-        list.forEach(function (n) { nationColors[n.name] = n.color; });
-      }).catch(function () {});
-      return Promise.resolve(nationsReq).then(function () {
-        return fetch('/api/regions').then(function (r) { return r.json(); }).then(function (data) {
-          regionData = data;
-          drawRegions();
-          return data;
-        });
-      });
+        JSON.parse(nationsText).forEach(function (n) { nationColors[n.name] = n.color; });
+        regionData = JSON.parse(regionsText);
+        drawRegions();
+        return regionData;
+      }).catch(function () { return regionData; });
     }
     refreshRegions();
     // Poll so ownership/health/color changes from capture combat show up live.

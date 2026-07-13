@@ -21,7 +21,11 @@ public final class RegionRenderer {
     /** Half-width, in blocks, of the biome color blend. */
     private static final int BIOME_BLEND_RADIUS = 5;
 
-    /** Per-render scratch buffers, so a single renderer is safe across threads. */
+    /**
+     * Per-render scratch buffers. Reused per thread (via {@link #buffers}) to
+     * avoid allocating ~10 MB of arrays on every tile; {@link #reset()} clears
+     * the fields that carry over between tiles.
+     */
     private static final class Buffers {
         final int[] colors = new int[AREA];
         final int[] heights = new int[AREA];
@@ -34,17 +38,25 @@ public final class RegionRenderer {
         final boolean[] filled = new boolean[AREA];
         final int[] blurTmp = new int[AREA];
 
-        Buffers() {
+        void reset() {
+            // Only colors/heights/filled carry meaning for unfilled pixels; the
+            // tint buffers are always written before they are read.
+            Arrays.fill(colors, 0);
             Arrays.fill(heights, Integer.MIN_VALUE);
+            Arrays.fill(filled, false);
         }
     }
+
+    /** One buffer set per rendering thread, reused across tiles. */
+    private final ThreadLocal<Buffers> buffers = ThreadLocal.withInitial(Buffers::new);
 
     /**
      * Renders the given region file. Returns null when the file contains
      * no renderable chunks.
      */
     public BufferedImage render(Path regionPath) throws IOException {
-        Buffers b = new Buffers();
+        Buffers b = buffers.get();
+        b.reset();
         boolean any = false;
 
         try (RegionFile region = new RegionFile(regionPath)) {
