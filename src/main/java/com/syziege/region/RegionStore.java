@@ -37,11 +37,28 @@ public final class RegionStore {
         }
     }
 
+    /** The capture core of a region: the block attackers must contest. */
+    public static final class Core {
+        public final String world;
+        public final int x;
+        public final int y;
+        public final int z;
+
+        Core(String world, int x, int y, int z) {
+            this.world = world;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+    }
+
     private final Path file;
     private final Logger logger;
     private final Map<String, RegionType> types = new LinkedHashMap<>();
     // world -> (packed chunk key -> type id)
     private final Map<String, Map<Long, String>> claims = new LinkedHashMap<>();
+    // region type id -> capture core
+    private final Map<String, Core> cores = new LinkedHashMap<>();
 
     public RegionStore(Path file, Logger logger) {
         this.file = file;
@@ -80,8 +97,47 @@ public final class RegionStore {
         for (Map<Long, String> worldClaims : claims.values()) {
             worldClaims.values().removeIf(id::equals);
         }
+        cores.remove(id);
         save();
         return true;
+    }
+
+    /** All region type display names, for tab completion. */
+    public synchronized List<String> typeNames() {
+        List<String> names = new ArrayList<>();
+        for (RegionType type : types.values()) {
+            names.add(type.name);
+        }
+        return names;
+    }
+
+    /** Finds a region type by its (case-insensitive) display name. */
+    public synchronized RegionType typeByName(String name) {
+        for (RegionType type : types.values()) {
+            if (type.name.equalsIgnoreCase(name)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    /** Sets (or moves) the capture core of an existing region type. */
+    public synchronized void setCore(String typeId, String world, int x, int y, int z) {
+        if (!types.containsKey(typeId)) {
+            throw new IllegalArgumentException("Unknown region type: " + typeId);
+        }
+        cores.put(typeId, new Core(world, x, y, z));
+        save();
+    }
+
+    public synchronized Core getCore(String typeId) {
+        return cores.get(typeId);
+    }
+
+    /** The region type id claiming the given chunk, or null. */
+    public synchronized String claimAt(String world, int chunkX, int chunkZ) {
+        Map<Long, String> worldClaims = claims.get(world);
+        return worldClaims == null ? null : worldClaims.get(key(chunkX, chunkZ));
     }
 
     /**
@@ -143,6 +199,19 @@ public final class RegionStore {
             }
             sb.append(']');
         }
+        sb.append("},\"cores\":{");
+        first = true;
+        for (Map.Entry<String, Core> core : cores.entrySet()) {
+            if (!first) {
+                sb.append(',');
+            }
+            first = false;
+            Core c = core.getValue();
+            sb.append(str(core.getKey())).append(":{\"world\":").append(str(c.world))
+                    .append(",\"x\":").append(c.x)
+                    .append(",\"y\":").append(c.y)
+                    .append(",\"z\":").append(c.z).append('}');
+        }
         sb.append("}}");
         return sb.toString();
     }
@@ -165,6 +234,7 @@ public final class RegionStore {
             }
             types.clear();
             claims.clear();
+            cores.clear();
             Map<String, Object> map = (Map<String, Object>) root;
 
             Object typeList = map.get("types");
@@ -204,6 +274,21 @@ public final class RegionStore {
                     }
                     if (!worldClaims.isEmpty()) {
                         claims.put(world.getKey(), worldClaims);
+                    }
+                }
+            }
+
+            Object coreMap = map.get("cores");
+            if (coreMap instanceof Map) {
+                for (Map.Entry<String, Object> entry : ((Map<String, Object>) coreMap).entrySet()) {
+                    if (!(entry.getValue() instanceof Map) || !types.containsKey(entry.getKey())) {
+                        continue;
+                    }
+                    Map<String, Object> c = (Map<String, Object>) entry.getValue();
+                    String world = string(c.get("world"));
+                    if (world != null) {
+                        cores.put(entry.getKey(),
+                                new Core(world, intOf(c.get("x")), intOf(c.get("y")), intOf(c.get("z"))));
                     }
                 }
             }

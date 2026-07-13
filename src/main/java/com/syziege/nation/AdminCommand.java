@@ -1,7 +1,9 @@
 package com.syziege.nation;
 
+import com.syziege.region.RegionStore;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -22,9 +24,11 @@ import java.util.UUID;
 public final class AdminCommand implements CommandExecutor, TabCompleter {
 
     private final NationStore store;
+    private final RegionStore regions;
 
-    public AdminCommand(NationStore store) {
+    public AdminCommand(NationStore store, RegionStore regions) {
         this.store = store;
+        this.regions = regions;
     }
 
     @Override
@@ -42,10 +46,48 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
                 return forceDisband(sender, args);
             case "강제탈퇴": case "forcekick": case "kick":
                 return forceKick(sender, args);
+            case "setcore": case "코어설정": case "코어":
+                return setCore(sender, args);
             default:
                 usage(sender);
                 return true;
         }
+    }
+
+    private boolean setCore(CommandSender sender, String[] args) {
+        if (regions == null) {
+            send(sender, "§c웹맵/지역 기능이 비활성화되어 있습니다.");
+            return true;
+        }
+        if (!(sender instanceof Player)) {
+            send(sender, "§c이 명령어는 게임 내에서만 사용할 수 있습니다.");
+            return true;
+        }
+        if (args.length < 2) {
+            send(sender, "§c사용법: §f/admin setcore <지역명>");
+            return true;
+        }
+        Player player = (Player) sender;
+        String name = String.join(" ", Arrays.copyOfRange(args, 1, args.length)).trim();
+        RegionStore.RegionType type = regions.typeByName(name);
+        if (type == null) {
+            send(sender, "§c지역을 찾을 수 없습니다: §f" + name
+                    + " §7(관리자 웹에서 지역 종류를 먼저 만드세요)");
+            return true;
+        }
+        Location loc = player.getLocation();
+        String world = loc.getWorld().getName();
+        int x = loc.getBlockX(), y = loc.getBlockY(), z = loc.getBlockZ();
+        regions.setCore(type.id, world, x, y, z);
+        send(sender, "§a지역 §e" + type.name + "§a 의 점령 코어를 현재 위치로 설정했습니다.");
+        send(sender, "§7위치: §f" + world + " (" + x + ", " + y + ", " + z + ")");
+
+        String claimedType = regions.claimAt(world, x >> 4, z >> 4);
+        if (!type.id.equals(claimedType)) {
+            send(sender, "§e주의: §7이 청크는 해당 지역으로 지정되어 있지 않습니다. "
+                    + "관리자 웹에서 청크를 먼저 지정하세요.");
+        }
+        return true;
     }
 
     private boolean forceDisband(CommandSender sender, String[] args) {
@@ -125,6 +167,7 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
         send(sender, "§6=== 관리자 명령어 ===");
         send(sender, "§e/admin 국가삭제 <국가> §7- 국가를 강제로 해체");
         send(sender, "§e/admin 강제탈퇴 <플레이어> §7- 국가원을 강제로 제외");
+        send(sender, "§e/admin setcore <지역명> §7- 현재 위치를 지역 점령 코어로 설정");
     }
 
     private static void send(CommandSender sender, String legacy) {
@@ -137,7 +180,7 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
             return List.of();
         }
         if (args.length == 1) {
-            return filter(Arrays.asList("국가삭제", "강제탈퇴"), args[0]);
+            return filter(Arrays.asList("국가삭제", "강제탈퇴", "setcore"), args[0]);
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase(Locale.ROOT);
@@ -154,6 +197,9 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
                     names.add(online.getName());
                 }
                 return filter(names, args[1]);
+            }
+            if ((sub.equals("setcore") || sub.equals("코어설정") || sub.equals("코어")) && regions != null) {
+                return filter(regions.typeNames(), args[1]);
             }
         }
         return List.of();

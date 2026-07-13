@@ -37,14 +37,20 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
     public void onEnable() {
         saveDefaultConfig();
 
-        // Nations work independently of the web map, so set them up first.
+        // Nations and regions work independently of the web map, so set them
+        // up first; the admin command needs the region store for setcore.
         nationStore = new NationStore(
                 getDataFolder().toPath().resolve("nations.json"), getLogger());
         nationStore.load();
+        regionStore = new RegionStore(
+                getDataFolder().toPath().resolve("webmap").resolve("regions.json"),
+                getLogger());
+        regionStore.load();
+
         NationCommand nationCommand = new NationCommand(nationStore);
         getCommand("국가").setExecutor(nationCommand);
         getCommand("국가").setTabCompleter(nationCommand);
-        AdminCommand adminCommand = new AdminCommand(nationStore);
+        AdminCommand adminCommand = new AdminCommand(nationStore, regionStore);
         getCommand("admin").setExecutor(adminCommand);
         getCommand("admin").setTabCompleter(adminCommand);
         Bukkit.getPluginManager().registerEvents(new NationListener(nationStore), this);
@@ -71,11 +77,6 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
 
         serverStateTracker = new ServerStateTracker();
         serverStateTracker.start(this);
-
-        regionStore = new RegionStore(
-                getDataFolder().toPath().resolve("webmap").resolve("regions.json"),
-                getLogger());
-        regionStore.load();
 
         adminKey = resolveAdminKey();
 

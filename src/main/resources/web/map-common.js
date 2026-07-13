@@ -18,6 +18,7 @@ window.SyziegeMap = (function () {
     var tileLayer = null;
     var regionFill = L.layerGroup().addTo(map);
     var regionEdges = L.layerGroup().addTo(map);
+    var coreLayer = L.layerGroup().addTo(map);
     var paintPreview = L.layerGroup().addTo(map);
     var playerMarkers = {};
     var worlds = [];
@@ -85,9 +86,15 @@ window.SyziegeMap = (function () {
       return t ? t.color : '#888888';
     }
 
+    function typeName(id) {
+      var t = regionData.types.find(function (x) { return x.id === id; });
+      return t ? t.name : id;
+    }
+
     function drawRegions() {
       regionFill.clearLayers();
       regionEdges.clearLayers();
+      coreLayer.clearLayers();
       var chunks = (regionData.claims && regionData.claims[currentWorld]) || [];
       var lookup = {};
       chunks.forEach(function (c) { lookup[c.x + ',' + c.z] = c.type; });
@@ -103,6 +110,22 @@ window.SyziegeMap = (function () {
         edge(lookup, c, color, 0, -1, [c.x * 16, c.z * 16], [c.x * 16 + 16, c.z * 16]);
         edge(lookup, c, color, 0, 1, [c.x * 16, c.z * 16 + 16], [c.x * 16 + 16, c.z * 16 + 16]);
       });
+
+      // Capture cores: a diamond marker at each region's core block.
+      var cores = regionData.cores || {};
+      Object.keys(cores).forEach(function (typeId) {
+        var core = cores[typeId];
+        if (core.world !== currentWorld) { return; }
+        L.marker(toLatLng(core.x, core.z), {
+          icon: L.divIcon({
+            className: 'core-marker',
+            html: '<div style="color:' + typeColor(typeId) + '">◆</div>',
+            iconSize: [18, 18], iconAnchor: [9, 9]
+          }),
+          interactive: true
+        }).bindTooltip(typeName(typeId) + ' 점령 코어', { direction: 'top' }).addTo(coreLayer);
+      });
+
       updateLegend();
     }
 

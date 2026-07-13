@@ -20,7 +20,7 @@ commands:
     description: 국가 강제 관리 명령어
     aliases: [syziegeadmin, sadmin]
     permission: syziege.admin
-    usage: /<command> <국가삭제|강제탈퇴>
+    usage: /<command> <국가삭제|강제탈퇴|setcore>
 
 permissions:
   syziege.admin:
