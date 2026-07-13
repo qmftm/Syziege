@@ -4,6 +4,7 @@ import com.syziege.nation.Nation;
 import com.syziege.nation.NationStore;
 import com.syziege.region.RegionStore;
 import com.syziege.util.Json;
+import com.syziege.war.WarSchedule;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -45,6 +46,7 @@ public final class WebServer {
     private final ServerStateTracker serverState;
     private final RegionStore regions;
     private final NationStore nations;
+    private final WarSchedule warSchedule;
     private final WebAuth auth;
     private final Function<String, InputStream> resource;
     private final String adminKey;
@@ -55,13 +57,15 @@ public final class WebServer {
 
     public WebServer(WorldRegistry worlds, TileService tiles, PlayerTracker players,
                      ServerStateTracker serverState, RegionStore regions, NationStore nations,
-                     WebAuth auth, Function<String, InputStream> resource, String adminKey, Logger logger) {
+                     WarSchedule warSchedule, WebAuth auth, Function<String, InputStream> resource,
+                     String adminKey, Logger logger) {
         this.worlds = worlds;
         this.tiles = tiles;
         this.players = players;
         this.serverState = serverState;
         this.regions = regions;
         this.nations = nations;
+        this.warSchedule = warSchedule;
         this.auth = auth;
         this.resource = resource;
         this.adminKey = adminKey;
@@ -150,6 +154,10 @@ public final class WebServer {
                 return;
             case "/api/nations":
                 sendJson(exchange, 200, nationsJson());
+                return;
+            case "/api/war":
+                sendJson(exchange, 200, "{\"restricted\":" + warSchedule.restricted()
+                        + ",\"active\":" + warSchedule.active() + "}");
                 return;
             case "/api/session":
                 serveSession(exchange);

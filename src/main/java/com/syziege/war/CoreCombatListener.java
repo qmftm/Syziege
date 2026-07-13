@@ -40,6 +40,7 @@ public final class CoreCombatListener implements Listener {
     private final RegionStore regions;
     private final NationStore nations;
     private final CoreEntityManager coreEntities;
+    private final WarSchedule warSchedule;
 
     private final int maxHealth;
     private final int damagePerHit;
@@ -52,15 +53,18 @@ public final class CoreCombatListener implements Listener {
     private final Map<UUID, Long> playerCooldown = new HashMap<>();
     private final Map<String, BossBar> bars = new HashMap<>();
     private BukkitTask tickTask;
+    private boolean lastWarActive;
 
     public CoreCombatListener(Plugin plugin, RegionStore regions, NationStore nations,
-                              CoreEntityManager coreEntities, int maxHealth, int damagePerHit,
+                              CoreEntityManager coreEntities, WarSchedule warSchedule,
+                              int maxHealth, int damagePerHit,
                               long hitCooldownMs, boolean requireNation,
                               int regenDelaySeconds, int regenPerSecond) {
         this.plugin = plugin;
         this.regions = regions;
         this.nations = nations;
         this.coreEntities = coreEntities;
+        this.warSchedule = warSchedule;
         this.maxHealth = Math.max(1, maxHealth);
         this.damagePerHit = Math.max(1, damagePerHit);
         this.hitCooldownMs = Math.max(0, hitCooldownMs);
@@ -70,6 +74,7 @@ public final class CoreCombatListener implements Listener {
     }
 
     public void start() {
+        lastWarActive = warSchedule.active();
         tickTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
     }
 
@@ -99,6 +104,11 @@ public final class CoreCombatListener implements Listener {
         }
         String typeId = coreEntities.typeOf(victim);
         if (typeId == null) {
+            return;
+        }
+
+        if (!warSchedule.active()) {
+            attacker.sendActionBar(LEGACY.deserialize("§c지금은 전쟁 시간이 아닙니다"));
             return;
         }
 
@@ -192,6 +202,16 @@ public final class CoreCombatListener implements Listener {
     }
 
     private void tick() {
+        if (warSchedule.restricted()) {
+            boolean active = warSchedule.active();
+            if (active != lastWarActive) {
+                lastWarActive = active;
+                Bukkit.getServer().sendMessage(LEGACY.deserialize(active
+                        ? "§c§l⚔ 전쟁이 시작되었습니다! 코어를 점령하세요!"
+                        : "§a전쟁이 종료되었습니다. 다음 전쟁 시간까지 점령이 잠깁니다."));
+            }
+        }
+
         long now = System.currentTimeMillis();
         for (String typeId : regions.coreTypeIds()) {
             RegionStore.Core core = regions.getCore(typeId);

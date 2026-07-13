@@ -29,3 +29,25 @@ core:
   regen-delay-seconds: 30
   # 회복이 시작되면 초당 회복되는 체력 (0이면 회복 없음)
   regen-per-second: 2
+
+# 전쟁 시간 설정 (실제 날짜/시간 기준)
+war:
+  # true면 아래 일정에 해당하는 실제 시간에만 코어를 점령할 수 있습니다.
+  # false면 언제든 점령할 수 있습니다.
+  enabled: false
+  # 일정을 해석할 시간대 (예: Asia/Seoul, UTC)
+  timezone: "Asia/Seoul"
+  # 매주 반복되는 전쟁 시간
+  # day 는 월~일 또는 MONDAY~SUNDAY (1=월 ... 7=일), 시간은 24시간 HH:mm
+  schedule:
+    - day: 토
+      start: "20:00"
+      end: "22:00"
+    - day: 일
+      start: "20:00"
+      end: "22:00"
+  # 특정 날짜에만 여는 전쟁 (선택, 없으면 비워두세요)
+  dates:
+    - date: "2026-08-15"
+      start: "19:00"
+      end: "23:00"

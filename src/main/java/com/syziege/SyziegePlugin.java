@@ -7,6 +7,7 @@ import com.syziege.nation.NationStore;
 import com.syziege.region.RegionStore;
 import com.syziege.war.CoreCombatListener;
 import com.syziege.war.CoreEntityManager;
+import com.syziege.war.WarSchedule;
 import com.syziege.webmap.PlayerTracker;
 import com.syziege.webmap.ServerStateTracker;
 import com.syziege.webmap.TileService;
@@ -35,6 +36,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
     private NationStore nationStore;
     private CoreEntityManager coreEntities;
     private CoreCombatListener coreCombat;
+    private WarSchedule warSchedule;
     private WebAuth webAuth;
     private WebServer webServer;
     private String adminKey;
@@ -54,6 +56,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
         regionStore.load();
 
         coreEntities = new CoreEntityManager(this, regionStore);
+        warSchedule = new WarSchedule(getConfig().getConfigurationSection("war"), getLogger());
 
         NationCommand nationCommand = new NationCommand(nationStore);
         getCommand("국가").setExecutor(nationCommand);
@@ -63,7 +66,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
         getCommand("admin").setTabCompleter(adminCommand);
         Bukkit.getPluginManager().registerEvents(new NationListener(nationStore), this);
 
-        coreCombat = new CoreCombatListener(this, regionStore, nationStore, coreEntities,
+        coreCombat = new CoreCombatListener(this, regionStore, nationStore, coreEntities, warSchedule,
                 getConfig().getInt("core.max-health", 100),
                 getConfig().getInt("core.damage-per-hit", 5),
                 getConfig().getLong("core.hit-cooldown-ms", 400),
@@ -109,6 +112,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
                 serverStateTracker,
                 regionStore,
                 nationStore,
+                warSchedule,
                 webAuth,
                 this::getResource,
                 adminKey,

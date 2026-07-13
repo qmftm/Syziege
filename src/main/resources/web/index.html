@@ -76,6 +76,12 @@
   #pwform button { background: #ffd75e; color: #241f00; border: none; border-radius: 6px;
     padding: 5px; font: inherit; font-weight: 600; cursor: pointer; }
   #pwMsg { font-size: 11.5px; min-height: 14px; color: #8a90a0; }
+  #warBadge { font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 2px 8px;
+    border-radius: 999px; vertical-align: middle; }
+  #warBadge.on { background: #e63946; color: #fff; }
+  #warBadge.off { background: #2b3040; color: #8a90a0; }
+  @keyframes warpulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+  #warBadge.on { animation: warpulse 1.4s ease-in-out infinite; }
 </style>
 </head>
 <body>
@@ -96,7 +102,7 @@
 </div>
 
 <div class="panel" id="top">
-  <h1>Syziege 지도</h1>
+  <h1>Syziege 지도 <span id="warBadge"></span></h1>
   <select id="world" aria-label="월드 선택"></select>
   <div class="clock">
     <span class="icon" id="weatherIcon">☀️</span>
@@ -157,6 +163,18 @@
   app.onWorldChange(refreshInfo);
   refreshInfo();
   setInterval(refreshInfo, 3000);
+
+  // War-time badge.
+  var warBadge = document.getElementById('warBadge');
+  function refreshWar() {
+    fetch('/api/war').then(function (r) { return r.json(); }).then(function (w) {
+      if (!w.restricted) { warBadge.className = ''; warBadge.textContent = ''; return; }
+      if (w.active) { warBadge.className = 'on'; warBadge.textContent = '⚔ 전쟁 중'; }
+      else { warBadge.className = 'off'; warBadge.textContent = '평화'; }
+    }).catch(function () {});
+  }
+  refreshWar();
+  setInterval(refreshWar, 5000);
 
   /* ---------- login ---------- */
   var loginEl = document.getElementById('login');

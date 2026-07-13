@@ -95,6 +95,27 @@ owner: 아발론     # 소유 국가 (없으면 비어 있음)
 설정은 `config.yml`의 `core:` 섹션에서 조정합니다 (최대 체력, 타격당 피해,
 타격 쿨다운, 국가 소속 필수 여부, 체력 회복).
 
+### 전쟁 시간
+
+`config.yml`의 `war:` 섹션에서 **실제 날짜/시간 기준**으로 점령 가능 시간을
+정합니다. `enabled: true`면 지정한 시간에만 코어를 점령할 수 있고, `false`면
+언제든 가능합니다. 시간대(`timezone`), 매주 반복 요일(`schedule`), 특정 날짜
+(`dates`)를 지원합니다.
+
+```yaml
+war:
+  enabled: true
+  timezone: "Asia/Seoul"
+  schedule:
+    - { day: 토, start: "20:00", end: "22:00" }
+    - { day: 일, start: "20:00", end: "22:00" }
+  dates:
+    - { date: "2026-08-15", start: "19:00", end: "23:00" }
+```
+
+전쟁이 시작/종료될 때 서버에 알림이 방송되고, 웹 지도 상단에 **⚔ 전쟁 중 / 평화**
+배지가 표시됩니다.
+
 권한: `syziege.admin` (기본 OP)
 
 ## 명령어 (웹맵)
