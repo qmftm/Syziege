@@ -21,6 +21,10 @@ commands:
     aliases: [syziegeadmin, sadmin]
     permission: syziege.admin
     usage: /<command> <국가삭제|강제탈퇴|setcore>
+  webmap:
+    description: 웹 지도 로그인 비밀번호 확인
+    permission: syziege.webmap
+    usage: /<command> [pw|재설정]
 
 permissions:
   syziege.admin:
@@ -28,4 +32,7 @@ permissions:
     default: op
   syziege.nation:
     description: Use the nation commands
+    default: true
+  syziege.webmap:
+    description: View your web map login password
     default: true

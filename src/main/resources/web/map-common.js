@@ -167,8 +167,19 @@ window.SyziegeMap = (function () {
 
     /* ---------- players ---------- */
 
+    var authRequiredCbs = [];
+    function clearPlayers() {
+      Object.keys(playerMarkers).forEach(function (n) { map.removeLayer(playerMarkers[n]); delete playerMarkers[n]; });
+      if (playersEl) { playersEl.innerHTML = ''; }
+      if (playersHead) { playersHead.textContent = '접속자'; }
+    }
+
     function refreshPlayers() {
-      fetch('/api/players').then(function (r) { return r.json(); }).then(function (list) {
+      fetch('/api/players').then(function (r) {
+        if (r.status === 401) { clearPlayers(); authRequiredCbs.forEach(function (cb) { cb(); }); return null; }
+        return r.json();
+      }).then(function (list) {
+        if (!list) { return; }
         var seen = {};
         list.forEach(function (p) {
           if (p.world !== currentWorld) { return; }
@@ -258,6 +269,8 @@ window.SyziegeMap = (function () {
       currentWorld: function () { return currentWorld; },
       onWorldChange: function (cb) { worldChangeCbs.push(cb); },
       refreshRegions: refreshRegions,
+      refreshPlayers: refreshPlayers,
+      onAuthRequired: function (cb) { authRequiredCbs.push(cb); },
       regionData: function () { return regionData; },
       setPaintMode: function (on) {
         paintMode = on;

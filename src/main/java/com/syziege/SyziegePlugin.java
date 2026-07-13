@@ -8,6 +8,7 @@ import com.syziege.region.RegionStore;
 import com.syziege.webmap.PlayerTracker;
 import com.syziege.webmap.ServerStateTracker;
 import com.syziege.webmap.TileService;
+import com.syziege.webmap.WebAuth;
 import com.syziege.webmap.WebServer;
 import com.syziege.webmap.WorldRegistry;
 import org.bukkit.Bukkit;
@@ -30,6 +31,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
     private ServerStateTracker serverStateTracker;
     private RegionStore regionStore;
     private NationStore nationStore;
+    private WebAuth webAuth;
     private WebServer webServer;
     private String adminKey;
 
@@ -78,6 +80,9 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
         serverStateTracker = new ServerStateTracker();
         serverStateTracker.start(this);
 
+        webAuth = new WebAuth(getDataFolder().toPath().resolve("webmap").resolve("webusers.json"), getLogger());
+        webAuth.load();
+
         adminKey = resolveAdminKey();
 
         webServer = new WebServer(
@@ -86,12 +91,16 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
                 playerTracker,
                 serverStateTracker,
                 regionStore,
+                nationStore,
+                webAuth,
                 this::getResource,
                 adminKey,
                 getLogger());
 
         String bind = getConfig().getString("webmap.bind", "0.0.0.0");
         int port = getConfig().getInt("webmap.port", 8123);
+        getCommand("webmap").setExecutor(new WebmapCommand(webAuth, port));
+        getCommand("webmap").setTabCompleter(new WebmapCommand(webAuth, port));
         try {
             webServer.start(bind, port);
             getLogger().info("User map:  http://<server>:" + port + "/");

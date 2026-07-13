@@ -1,5 +1,7 @@
 package com.syziege.webmap;
 
+import com.syziege.nation.Nation;
+import com.syziege.nation.NationStore;
 import com.syziege.region.RegionStore;
 import com.syziege.util.Json;
 import com.sun.net.httpserver.HttpExchange;
@@ -13,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
@@ -33,11 +37,15 @@ public final class WebServer {
     private static final int MAX_BODY = 1 << 20; // 1 MiB
     private static final int MAX_CHUNKS_PER_REQUEST = 20000;
 
+    private static final String SESSION_COOKIE = "syziege_session";
+
     private final WorldRegistry worlds;
     private final TileService tiles;
     private final PlayerTracker players;
     private final ServerStateTracker serverState;
     private final RegionStore regions;
+    private final NationStore nations;
+    private final WebAuth auth;
     private final Function<String, InputStream> resource;
     private final String adminKey;
     private final Logger logger;
@@ -46,13 +54,15 @@ public final class WebServer {
     private ExecutorService executor;
 
     public WebServer(WorldRegistry worlds, TileService tiles, PlayerTracker players,
-                     ServerStateTracker serverState, RegionStore regions,
-                     Function<String, InputStream> resource, String adminKey, Logger logger) {
+                     ServerStateTracker serverState, RegionStore regions, NationStore nations,
+                     WebAuth auth, Function<String, InputStream> resource, String adminKey, Logger logger) {
         this.worlds = worlds;
         this.tiles = tiles;
         this.players = players;
         this.serverState = serverState;
         this.regions = regions;
+        this.nations = nations;
+        this.auth = auth;
         this.resource = resource;
         this.adminKey = adminKey;
         this.logger = logger;
@@ -130,7 +140,7 @@ public final class WebServer {
                 sendJson(exchange, 200, worldsJson());
                 return;
             case "/api/players":
-                sendJson(exchange, 200, playersJson());
+                servePlayers(exchange);
                 return;
             case "/api/serverinfo":
                 sendJson(exchange, 200, serverInfoJson());
@@ -138,12 +148,26 @@ public final class WebServer {
             case "/api/regions":
                 sendJson(exchange, 200, regions.toJson());
                 return;
+            case "/api/session":
+                serveSession(exchange);
+                return;
             default:
                 send(exchange, 404, "text/plain", "Not Found".getBytes(StandardCharsets.UTF_8));
         }
     }
 
     private void handlePost(HttpExchange exchange, String path) throws IOException {
+        if (path.equals("/api/login")) {
+            handleLogin(exchange);
+            return;
+        }
+        if (path.equals("/api/logout")) {
+            auth.logout(sessionToken(exchange));
+            exchange.getResponseHeaders().add("Set-Cookie",
+                    SESSION_COOKIE + "=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax");
+            sendJson(exchange, 200, "{}");
+            return;
+        }
         if (!path.startsWith("/api/admin/")) {
             send(exchange, 404, "text/plain", "Not Found".getBytes(StandardCharsets.UTF_8));
             return;
@@ -241,6 +265,80 @@ public final class WebServer {
         }
     }
 
+    private void handleLogin(HttpExchange exchange) throws IOException {
+        Map<String, Object> body = readJsonBody(exchange);
+        if (body == null) {
+            sendJson(exchange, 400, "{\"error\":\"invalid JSON body\"}");
+            return;
+        }
+        String token = auth.login(asString(body.get("name")), asString(body.get("password")));
+        if (token == null) {
+            sendJson(exchange, 401, "{\"error\":\"아이디 또는 비밀번호가 올바르지 않습니다\"}");
+            return;
+        }
+        exchange.getResponseHeaders().add("Set-Cookie",
+                SESSION_COOKIE + "=" + token + "; Path=/; HttpOnly; Max-Age=604800; SameSite=Lax");
+        UUID uuid = auth.sessionUser(token);
+        sendJson(exchange, 200, "{\"name\":" + jsonString(auth.nameOf(uuid)) + "}");
+    }
+
+    private void serveSession(HttpExchange exchange) throws IOException {
+        UUID uuid = auth.sessionUser(sessionToken(exchange));
+        if (uuid == null) {
+            sendJson(exchange, 200, "{\"loggedIn\":false}");
+            return;
+        }
+        Nation nation = nations.byPlayer(uuid);
+        sendJson(exchange, 200, "{\"loggedIn\":true,\"name\":" + jsonString(auth.nameOf(uuid))
+                + ",\"nation\":" + (nation == null ? "null" : jsonString(nation.name())) + "}");
+    }
+
+    /** Serves only the logged-in player's own team (nation) member positions. */
+    private void servePlayers(HttpExchange exchange) throws IOException {
+        UUID uuid = auth.sessionUser(sessionToken(exchange));
+        if (uuid == null) {
+            sendJson(exchange, 401, "{\"error\":\"login required\"}");
+            return;
+        }
+        Nation nation = nations.byPlayer(uuid);
+        Set<UUID> allowed = nation == null ? Set.of(uuid) : nation.members().keySet();
+
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (PlayerTracker.PlayerInfo player : players.players()) {
+            if (!allowed.contains(player.uuid)) {
+                continue;
+            }
+            if (!first) {
+                sb.append(',');
+            }
+            first = false;
+            sb.append("{\"name\":").append(jsonString(player.name))
+                    .append(",\"world\":").append(jsonString(player.world))
+                    .append(",\"x\":").append(player.x)
+                    .append(",\"y\":").append(player.y)
+                    .append(",\"z\":").append(player.z)
+                    .append('}');
+        }
+        sendJson(exchange, 200, sb.append(']').toString());
+    }
+
+    private String sessionToken(HttpExchange exchange) {
+        List<String> cookies = exchange.getRequestHeaders().get("Cookie");
+        if (cookies == null) {
+            return null;
+        }
+        for (String header : cookies) {
+            for (String pair : header.split(";")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0 && pair.substring(0, eq).trim().equals(SESSION_COOKIE)) {
+                    return pair.substring(eq + 1).trim();
+                }
+            }
+        }
+        return null;
+    }
+
     private void serveAsset(HttpExchange exchange, String resourcePath) throws IOException {
         try (InputStream in = resource.apply(resourcePath)) {
             if (in == null) {
@@ -290,24 +388,6 @@ public final class WebServer {
             sb.append("{\"name\":").append(jsonString(world.name))
                     .append(",\"spawnX\":").append(world.spawnX)
                     .append(",\"spawnZ\":").append(world.spawnZ)
-                    .append('}');
-        }
-        return sb.append(']').toString();
-    }
-
-    private String playersJson() {
-        StringBuilder sb = new StringBuilder("[");
-        boolean first = true;
-        for (PlayerTracker.PlayerInfo player : players.players()) {
-            if (!first) {
-                sb.append(',');
-            }
-            first = false;
-            sb.append("{\"name\":").append(jsonString(player.name))
-                    .append(",\"world\":").append(jsonString(player.world))
-                    .append(",\"x\":").append(player.x)
-                    .append(",\"y\":").append(player.y)
-                    .append(",\"z\":").append(player.z)
                     .append('}');
         }
         return sb.append(']').toString();
