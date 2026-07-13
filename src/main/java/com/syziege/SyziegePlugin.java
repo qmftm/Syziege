@@ -1,5 +1,6 @@
 package com.syziege;
 
+import com.syziege.nation.AdminCommand;
 import com.syziege.nation.NationCommand;
 import com.syziege.nation.NationListener;
 import com.syziege.nation.NationStore;
@@ -43,6 +44,9 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
         NationCommand nationCommand = new NationCommand(nationStore);
         getCommand("국가").setExecutor(nationCommand);
         getCommand("국가").setTabCompleter(nationCommand);
+        AdminCommand adminCommand = new AdminCommand(nationStore);
+        getCommand("admin").setExecutor(adminCommand);
+        getCommand("admin").setTabCompleter(adminCommand);
         Bukkit.getPluginManager().registerEvents(new NationListener(nationStore), this);
 
         if (!getConfig().getBoolean("webmap.enabled", true)) {

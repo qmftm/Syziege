@@ -16,6 +16,11 @@ commands:
     aliases: [nation, gukga]
     permission: syziege.nation
     usage: /<command> <생성|해체|초대|탈퇴|정보|목록>
+  admin:
+    description: 국가 강제 관리 명령어
+    aliases: [syziegeadmin, sadmin]
+    permission: syziege.admin
+    usage: /<command> <국가삭제|강제탈퇴>
 
 permissions:
   syziege.admin:

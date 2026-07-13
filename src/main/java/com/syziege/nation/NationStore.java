@@ -47,6 +47,22 @@ public final class NationStore {
         return k == null ? null : nations.get(k);
     }
 
+    /**
+     * Finds a member across all nations by (case-insensitive) name, for admin
+     * tools that must act on players who may be offline. Returns the member's
+     * UUID, or null if no nation contains a member with that name.
+     */
+    public synchronized UUID findMemberByName(String name) {
+        for (Nation nation : nations.values()) {
+            for (Map.Entry<UUID, String> member : nation.members().entrySet()) {
+                if (member.getValue().equalsIgnoreCase(name)) {
+                    return member.getKey();
+                }
+            }
+        }
+        return null;
+    }
+
     public synchronized boolean exists(String name) {
         return nations.containsKey(key(name));
     }
