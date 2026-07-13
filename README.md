@@ -34,7 +34,7 @@ ubwar season plus — 국가전쟁 서버 플러그인 (Paper 26.2)
   편집에는 관리자 키가 필요합니다 (`/syziege admin` 으로 확인).
 
 지정된 지역은 두 화면 모두에서 색으로 표시되며, 경계는 자동으로 외곽선이 그려집니다.
-지역 데이터는 `plugins/Syziege/webmap/regions.json` 에 저장됩니다.
+지역 데이터는 `plugins/Syziege/webmap/regions.yml` 에 저장됩니다.
 
 ## 국가 시스템
 
@@ -50,7 +50,7 @@ ubwar season plus — 국가전쟁 서버 플러그인 (Paper 26.2)
 | `/국가 목록` | 전체 국가 목록을 GUI로 봅니다 | 누구나 |
 
 초대를 받으면 채팅에 **[수락] / [거절]** 버튼이 뜨고, 클릭해서 가입/거절합니다
-(초대는 2분간 유효). 국가 데이터는 `plugins/Syziege/nations.json` 에 저장됩니다.
+(초대는 2분간 유효). 국가 데이터는 `plugins/Syziege/nations.yml` 에 저장됩니다.
 
 권한: `syziege.nation` (기본 허용)
 

@@ -1,12 +1,10 @@
 package com.syziege.region;
 
-import com.syziege.util.Json;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -216,83 +214,47 @@ public final class RegionStore {
         return sb.toString();
     }
 
-    // ---- persistence ----
+    // ---- persistence (YAML) ----
 
-    @SuppressWarnings("unchecked")
     public synchronized void load() {
         if (!Files.isRegularFile(file)) {
             return;
         }
         try {
-            String text = Files.readString(file, StandardCharsets.UTF_8);
-            if (text.isBlank()) {
-                return;
-            }
-            Object root = Json.parse(text);
-            if (!(root instanceof Map)) {
-                return;
-            }
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file.toFile());
             types.clear();
             claims.clear();
             cores.clear();
-            Map<String, Object> map = (Map<String, Object>) root;
 
-            Object typeList = map.get("types");
-            if (typeList instanceof List) {
-                for (Object obj : (List<Object>) typeList) {
-                    if (!(obj instanceof Map)) {
-                        continue;
-                    }
-                    Map<String, Object> t = (Map<String, Object>) obj;
-                    String id = string(t.get("id"));
-                    if (id == null) {
-                        continue;
-                    }
-                    types.put(id, new RegionType(id,
-                            string(t.getOrDefault("name", id)),
-                            string(t.getOrDefault("color", "#888888"))));
+            for (Map<?, ?> t : yaml.getMapList("types")) {
+                String id = asStr(t.get("id"));
+                if (id == null) {
+                    continue;
                 }
+                types.put(id, new RegionType(id,
+                        orDefault(asStr(t.get("name")), id),
+                        orDefault(asStr(t.get("color")), "#888888")));
             }
 
-            Object claimMap = map.get("claims");
-            if (claimMap instanceof Map) {
-                for (Map.Entry<String, Object> world : ((Map<String, Object>) claimMap).entrySet()) {
-                    if (!(world.getValue() instanceof List)) {
-                        continue;
-                    }
-                    Map<Long, String> worldClaims = new LinkedHashMap<>();
-                    for (Object obj : (List<Object>) world.getValue()) {
-                        if (!(obj instanceof Map)) {
-                            continue;
-                        }
-                        Map<String, Object> c = (Map<String, Object>) obj;
-                        String typeId = string(c.get("type"));
-                        if (typeId == null || !types.containsKey(typeId)) {
-                            continue;
-                        }
-                        worldClaims.put(key(intOf(c.get("x")), intOf(c.get("z"))), typeId);
-                    }
-                    if (!worldClaims.isEmpty()) {
-                        claims.put(world.getKey(), worldClaims);
-                    }
+            for (Map<?, ?> c : yaml.getMapList("claims")) {
+                String world = asStr(c.get("world"));
+                String typeId = asStr(c.get("type"));
+                if (world == null || typeId == null || !types.containsKey(typeId)) {
+                    continue;
                 }
+                claims.computeIfAbsent(world, w -> new LinkedHashMap<>())
+                        .put(key(asInt(c.get("x")), asInt(c.get("z"))), typeId);
             }
 
-            Object coreMap = map.get("cores");
-            if (coreMap instanceof Map) {
-                for (Map.Entry<String, Object> entry : ((Map<String, Object>) coreMap).entrySet()) {
-                    if (!(entry.getValue() instanceof Map) || !types.containsKey(entry.getKey())) {
-                        continue;
-                    }
-                    Map<String, Object> c = (Map<String, Object>) entry.getValue();
-                    String world = string(c.get("world"));
-                    if (world != null) {
-                        cores.put(entry.getKey(),
-                                new Core(world, intOf(c.get("x")), intOf(c.get("y")), intOf(c.get("z"))));
-                    }
+            for (Map<?, ?> c : yaml.getMapList("cores")) {
+                String typeId = asStr(c.get("type"));
+                String world = asStr(c.get("world"));
+                if (typeId == null || world == null || !types.containsKey(typeId)) {
+                    continue;
                 }
+                cores.put(typeId, new Core(world, asInt(c.get("x")), asInt(c.get("y")), asInt(c.get("z"))));
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (RuntimeException e) {
             logger.log(Level.WARNING, "Failed to load regions from " + file, e);
         }
     }
@@ -300,20 +262,60 @@ public final class RegionStore {
     private void save() {
         try {
             Files.createDirectories(file.getParent());
-            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.writeString(tmp, toJson(), StandardCharsets.UTF_8);
-            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
+            YamlConfiguration yaml = new YamlConfiguration();
+
+            List<Map<String, Object>> typeList = new ArrayList<>();
+            for (RegionType type : types.values()) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", type.id);
+                m.put("name", type.name);
+                m.put("color", type.color);
+                typeList.add(m);
+            }
+            yaml.set("types", typeList);
+
+            List<Map<String, Object>> claimList = new ArrayList<>();
+            for (Map.Entry<String, Map<Long, String>> world : claims.entrySet()) {
+                for (Map.Entry<Long, String> chunk : world.getValue().entrySet()) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("world", world.getKey());
+                    m.put("x", keyX(chunk.getKey()));
+                    m.put("z", keyZ(chunk.getKey()));
+                    m.put("type", chunk.getValue());
+                    claimList.add(m);
+                }
+            }
+            yaml.set("claims", claimList);
+
+            List<Map<String, Object>> coreList = new ArrayList<>();
+            for (Map.Entry<String, Core> entry : cores.entrySet()) {
+                Core c = entry.getValue();
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("type", entry.getKey());
+                m.put("world", c.world);
+                m.put("x", c.x);
+                m.put("y", c.y);
+                m.put("z", c.z);
+                coreList.add(m);
+            }
+            yaml.set("cores", coreList);
+
+            yaml.save(file.toFile());
+        } catch (IOException | RuntimeException e) {
             logger.log(Level.WARNING, "Failed to save regions to " + file, e);
         }
     }
 
-    private static int intOf(Object o) {
+    private static int asInt(Object o) {
         return o instanceof Number ? ((Number) o).intValue() : 0;
     }
 
-    private static String string(Object o) {
+    private static String asStr(Object o) {
         return o instanceof String ? (String) o : null;
+    }
+
+    private static String orDefault(String value, String fallback) {
+        return value == null ? fallback : value;
     }
 
     private static String str(String value) {
