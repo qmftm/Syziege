@@ -1,10 +1,12 @@
 package com.syziege.nation;
 
-import org.bukkit.configuration.file.YamlConfiguration;
+import com.syziege.util.Json;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -16,7 +18,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Stores nations and the player -> nation index, persisted to nations.yml.
+ * Stores nations and the player -> nation index, persisted to nations.json.
  * Methods are synchronized so the data can later be read by the web map's
  * HTTP threads as well as the main thread.
  */
@@ -106,39 +108,59 @@ public final class NationStore {
         }
     }
 
-    // ---- persistence (YAML) ----
+    // ---- persistence ----
 
+    @SuppressWarnings("unchecked")
     public synchronized void load() {
         if (!Files.isRegularFile(file)) {
             return;
         }
         try {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file.toFile());
+            String text = Files.readString(file, StandardCharsets.UTF_8);
+            if (text.isBlank()) {
+                return;
+            }
+            Object root = Json.parse(text);
+            if (!(root instanceof Map)) {
+                return;
+            }
             nations.clear();
             playerIndex.clear();
-            for (Map<?, ?> entry : yaml.getMapList("nations")) {
-                String name = str(entry.get("name"));
-                UUID leader = uuid(entry.get("leader"));
-                if (name == null || leader == null) {
+            Object list = ((Map<String, Object>) root).get("nations");
+            if (!(list instanceof List)) {
+                return;
+            }
+            for (Object obj : (List<Object>) list) {
+                if (!(obj instanceof Map)) {
                     continue;
                 }
-                long createdAt = entry.get("createdAt") instanceof Number
-                        ? ((Number) entry.get("createdAt")).longValue() : System.currentTimeMillis();
+                Map<String, Object> n = (Map<String, Object>) obj;
+                String name = string(n.get("name"));
+                String leaderStr = string(n.get("leader"));
+                if (name == null || leaderStr == null) {
+                    continue;
+                }
+                UUID leader = parseUuid(leaderStr);
+                if (leader == null) {
+                    continue;
+                }
+                long createdAt = n.get("createdAt") instanceof Number
+                        ? ((Number) n.get("createdAt")).longValue() : System.currentTimeMillis();
 
+                String leaderName = leaderStr;
                 LinkedHashMap<UUID, String> members = new LinkedHashMap<>();
-                String leaderName = leader.toString().substring(0, 8);
-                Object memberList = entry.get("members");
+                Object memberList = n.get("members");
                 if (memberList instanceof List) {
-                    for (Object mo : (List<?>) memberList) {
+                    for (Object mo : (List<Object>) memberList) {
                         if (!(mo instanceof Map)) {
                             continue;
                         }
-                        Map<?, ?> m = (Map<?, ?>) mo;
-                        UUID id = uuid(m.get("id"));
+                        Map<String, Object> m = (Map<String, Object>) mo;
+                        UUID id = parseUuid(string(m.get("id")));
                         if (id == null) {
                             continue;
                         }
-                        String mn = str(m.get("name"));
+                        String mn = string(m.get("name"));
                         members.put(id, mn == null ? id.toString().substring(0, 8) : mn);
                         if (id.equals(leader) && mn != null) {
                             leaderName = mn;
@@ -159,7 +181,7 @@ public final class NationStore {
                     playerIndex.put(member, key(name));
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (IOException | RuntimeException e) {
             logger.log(Level.WARNING, "Failed to load nations from " + file, e);
         }
     }
@@ -167,42 +189,76 @@ public final class NationStore {
     private void save() {
         try {
             Files.createDirectories(file.getParent());
-            YamlConfiguration yaml = new YamlConfiguration();
-            List<Map<String, Object>> list = new ArrayList<>();
-            for (Nation nation : nations.values()) {
-                Map<String, Object> n = new LinkedHashMap<>();
-                n.put("name", nation.name());
-                n.put("leader", nation.leader().toString());
-                n.put("createdAt", nation.createdAt());
-                List<Map<String, Object>> members = new ArrayList<>();
-                for (Map.Entry<UUID, String> member : nation.members().entrySet()) {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("id", member.getKey().toString());
-                    m.put("name", member.getValue());
-                    members.add(m);
-                }
-                n.put("members", members);
-                list.add(n);
-            }
-            yaml.set("nations", list);
-            yaml.save(file.toFile());
-        } catch (IOException | RuntimeException e) {
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+            Files.writeString(tmp, toJson(), StandardCharsets.UTF_8);
+            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
             logger.log(Level.WARNING, "Failed to save nations to " + file, e);
         }
     }
 
-    private static UUID uuid(Object o) {
-        if (!(o instanceof String)) {
+    private String toJson() {
+        StringBuilder sb = new StringBuilder("{\"nations\":[");
+        boolean first = true;
+        for (Nation nation : nations.values()) {
+            if (!first) {
+                sb.append(',');
+            }
+            first = false;
+            sb.append("{\"name\":").append(str(nation.name()))
+                    .append(",\"leader\":").append(str(nation.leader().toString()))
+                    .append(",\"createdAt\":").append(nation.createdAt())
+                    .append(",\"members\":[");
+            boolean firstMember = true;
+            for (Map.Entry<UUID, String> member : nation.members().entrySet()) {
+                if (!firstMember) {
+                    sb.append(',');
+                }
+                firstMember = false;
+                sb.append("{\"id\":").append(str(member.getKey().toString()))
+                        .append(",\"name\":").append(str(member.getValue())).append('}');
+            }
+            sb.append("]}");
+        }
+        return sb.append("]}").toString();
+    }
+
+    private static UUID parseUuid(String s) {
+        if (s == null) {
             return null;
         }
         try {
-            return UUID.fromString((String) o);
+            return UUID.fromString(s);
         } catch (IllegalArgumentException e) {
             return null;
         }
     }
 
-    private static String str(Object o) {
+    private static String string(Object o) {
         return o instanceof String ? (String) o : null;
+    }
+
+    private static String str(String value) {
+        if (value == null) {
+            return "\"\"";
+        }
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.append('"').toString();
     }
 }

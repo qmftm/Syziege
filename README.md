@@ -34,7 +34,9 @@ ubwar season plus — 국가전쟁 서버 플러그인 (Paper 26.2)
   편집에는 관리자 키가 필요합니다 (`/syziege admin` 으로 확인).
 
 지정된 지역은 두 화면 모두에서 색으로 표시되며, 경계는 자동으로 외곽선이 그려집니다.
-지역 데이터는 `plugins/Syziege/webmap/regions.yml` 에 저장됩니다.
+지역 데이터(종류·청크)는 `plugins/Syziege/webmap/regions.json` 에 저장되고,
+각 지역의 **점령 코어 설정**은 편집하기 쉽도록 `webmap/cores/<지역>.yml` 개별
+YAML 파일에 저장됩니다.
 
 ## 국가 시스템
 
@@ -50,7 +52,7 @@ ubwar season plus — 국가전쟁 서버 플러그인 (Paper 26.2)
 | `/국가 목록` | 전체 국가 목록을 GUI로 봅니다 | 누구나 |
 
 초대를 받으면 채팅에 **[수락] / [거절]** 버튼이 뜨고, 클릭해서 가입/거절합니다
-(초대는 2분간 유효). 국가 데이터는 `plugins/Syziege/nations.yml` 에 저장됩니다.
+(초대는 2분간 유효). 국가 데이터는 `plugins/Syziege/nations.json` 에 저장됩니다.
 
 권한: `syziege.nation` (기본 허용)
 
@@ -65,7 +67,18 @@ ubwar season plus — 국가전쟁 서버 플러그인 (Paper 26.2)
 | `/admin setcore <지역명>` | 현재 서 있는 위치를 해당 지역의 점령 코어로 설정 |
 
 `setcore`로 지정한 점령 코어는 웹맵에 해당 지역 색의 ◆ 마커로 표시됩니다.
-국가전쟁에서 공격 측이 다퉈야 하는 지점이 됩니다.
+국가전쟁에서 공격 측이 다퉈야 하는 지점이 됩니다. 각 코어는
+`webmap/cores/<지역>.yml` 파일로 저장되며 **위치·체력·소유 국가**를 담습니다:
+
+```yaml
+region: north
+world: world
+x: -158
+y: 72
+z: -166
+health: 100      # 코어 체력
+owner: 아발론     # 소유 국가 (없으면 비어 있음)
+```
 
 권한: `syziege.admin` (기본 OP)
 

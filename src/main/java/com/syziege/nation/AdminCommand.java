@@ -79,8 +79,12 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
         String world = loc.getWorld().getName();
         int x = loc.getBlockX(), y = loc.getBlockY(), z = loc.getBlockZ();
         regions.setCore(type.id, world, x, y, z);
+        RegionStore.Core core = regions.getCore(type.id);
         send(sender, "§a지역 §e" + type.name + "§a 의 점령 코어를 현재 위치로 설정했습니다.");
         send(sender, "§7위치: §f" + world + " (" + x + ", " + y + ", " + z + ")");
+        send(sender, "§7체력: §f" + core.health + " §7/ 소유 국가: §f"
+                + (core.owner == null ? "없음" : core.owner));
+        send(sender, "§8세부 설정은 §7plugins/Syziege/webmap/cores/" + type.id + ".yml §8에서 편집할 수 있습니다.");
 
         String claimedType = regions.claimAt(world, x >> 4, z >> 4);
         if (!type.id.equals(claimedType)) {

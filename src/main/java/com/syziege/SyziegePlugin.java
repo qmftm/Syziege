@@ -42,10 +42,10 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
         // Nations and regions work independently of the web map, so set them
         // up first; the admin command needs the region store for setcore.
         nationStore = new NationStore(
-                getDataFolder().toPath().resolve("nations.yml"), getLogger());
+                getDataFolder().toPath().resolve("nations.json"), getLogger());
         nationStore.load();
         regionStore = new RegionStore(
-                getDataFolder().toPath().resolve("webmap").resolve("regions.yml"),
+                getDataFolder().toPath().resolve("webmap").resolve("regions.json"),
                 getLogger());
         regionStore.load();
 
@@ -80,7 +80,7 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
         serverStateTracker = new ServerStateTracker();
         serverStateTracker.start(this);
 
-        webAuth = new WebAuth(getDataFolder().toPath().resolve("webmap").resolve("webusers.yml"), getLogger());
+        webAuth = new WebAuth(getDataFolder().toPath().resolve("webmap").resolve("webusers.json"), getLogger());
         webAuth.load();
 
         adminKey = resolveAdminKey();

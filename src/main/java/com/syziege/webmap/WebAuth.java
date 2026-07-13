@@ -1,12 +1,13 @@
 package com.syziege.webmap;
 
-import org.bukkit.configuration.file.YamlConfiguration;
+import com.syziege.util.Json;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -168,19 +169,31 @@ public final class WebAuth {
         return diff == 0;
     }
 
-    // ---- persistence (YAML) ----
+    // ---- persistence ----
 
+    @SuppressWarnings("unchecked")
     public synchronized void load() {
         if (!Files.isRegularFile(file)) {
             return;
         }
         try {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file.toFile());
+            String text = Files.readString(file, StandardCharsets.UTF_8);
+            if (text.isBlank()) {
+                return;
+            }
+            Object root = Json.parse(text);
+            if (!(root instanceof List)) {
+                return;
+            }
             users.clear();
-            for (Map<?, ?> u : yaml.getMapList("users")) {
-                String id = str(u.get("id"));
-                String name = str(u.get("name"));
-                String password = str(u.get("password"));
+            for (Object obj : (List<Object>) root) {
+                if (!(obj instanceof Map)) {
+                    continue;
+                }
+                Map<String, Object> u = (Map<String, Object>) obj;
+                String id = string(u.get("id"));
+                String name = string(u.get("name"));
+                String password = string(u.get("password"));
                 if (id == null || name == null || password == null) {
                     continue;
                 }
@@ -191,7 +204,7 @@ public final class WebAuth {
                     // skip malformed entry
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (IOException | RuntimeException e) {
             logger.log(Level.WARNING, "Failed to load web users from " + file, e);
         }
     }
@@ -199,23 +212,51 @@ public final class WebAuth {
     private void save() {
         try {
             Files.createDirectories(file.getParent());
-            YamlConfiguration yaml = new YamlConfiguration();
-            List<Map<String, Object>> list = new ArrayList<>();
+            StringBuilder sb = new StringBuilder("[");
+            boolean first = true;
             for (User user : users.values()) {
-                Map<String, Object> u = new LinkedHashMap<>();
-                u.put("id", user.id.toString());
-                u.put("name", user.name);
-                u.put("password", user.password);
-                list.add(u);
+                if (!first) {
+                    sb.append(',');
+                }
+                first = false;
+                sb.append("{\"id\":").append(str(user.id.toString()))
+                        .append(",\"name\":").append(str(user.name))
+                        .append(",\"password\":").append(str(user.password)).append('}');
             }
-            yaml.set("users", list);
-            yaml.save(file.toFile());
-        } catch (IOException | RuntimeException e) {
+            sb.append(']');
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+            Files.writeString(tmp, sb.toString(), StandardCharsets.UTF_8);
+            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
             logger.log(Level.WARNING, "Failed to save web users to " + file, e);
         }
     }
 
-    private static String str(Object o) {
+    private static String string(Object o) {
         return o instanceof String ? (String) o : null;
+    }
+
+    private static String str(String value) {
+        if (value == null) {
+            return "\"\"";
+        }
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.append('"').toString();
     }
 }
