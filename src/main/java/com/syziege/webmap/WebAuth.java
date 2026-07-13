@@ -82,6 +82,32 @@ public final class WebAuth {
         return user.password;
     }
 
+    /** Sets a chosen password for the player (creating the account if needed). */
+    public synchronized void setPassword(UUID uuid, String name, String newPassword) {
+        User user = users.get(uuid);
+        if (user == null) {
+            users.put(uuid, new User(uuid, name, newPassword));
+        } else {
+            user.name = name;
+            user.password = newPassword;
+        }
+        save();
+    }
+
+    /**
+     * Changes the password after verifying the current one. Returns false if
+     * the account is unknown or the current password does not match.
+     */
+    public synchronized boolean changePassword(UUID uuid, String current, String next) {
+        User user = users.get(uuid);
+        if (user == null || !constantTimeEquals(user.password, current)) {
+            return false;
+        }
+        user.password = next;
+        save();
+        return true;
+    }
+
     /** Verifies a name/password login, returning a new session token or null. */
     public synchronized String login(String name, String password) {
         if (name == null || password == null) {

@@ -39,20 +39,46 @@ public final class WebmapCommand implements CommandExecutor, TabCompleter {
         Player player = (Player) sender;
         String sub = args.length > 0 ? args[0].toLowerCase(Locale.ROOT) : "pw";
 
-        String password;
-        boolean reset = sub.equals("재설정") || sub.equals("reset") || sub.equals("초기화");
-        if (reset) {
-            password = auth.resetPassword(player.getUniqueId(), player.getName());
-        } else {
-            password = auth.ensurePassword(player.getUniqueId(), player.getName());
+        // Set a chosen password: /webmap 변경 <새 비밀번호>
+        if (sub.equals("변경") || sub.equals("change") || sub.equals("set")) {
+            if (args.length < 2) {
+                send(sender, "§c사용법: §f/webmap 변경 <새 비밀번호>");
+                return true;
+            }
+            String newPassword = args[1];
+            if (!isValidPassword(newPassword)) {
+                send(sender, "§c비밀번호는 공백 없이 4~32자여야 합니다.");
+                return true;
+            }
+            auth.setPassword(player.getUniqueId(), player.getName(), newPassword);
+            send(sender, "§a웹 지도 비밀번호를 변경했습니다.");
+            send(sender, "§7아이디: §f" + player.getName() + " §7/ 비밀번호: §e" + newPassword);
+            return true;
         }
+
+        boolean reset = sub.equals("재설정") || sub.equals("reset") || sub.equals("초기화");
+        String password = reset
+                ? auth.resetPassword(player.getUniqueId(), player.getName())
+                : auth.ensurePassword(player.getUniqueId(), player.getName());
 
         send(sender, "§6=== 웹 지도 로그인 ===");
         send(sender, "§7주소: §fhttp://<서버주소>:" + port + "/");
         send(sender, "§7아이디: §f" + player.getName());
         send(sender, "§7비밀번호: §e" + password + (reset ? " §a(새로 발급됨)" : ""));
         send(sender, "§8로그인하면 지도에서 같은 국가원의 위치만 보입니다. 비밀번호는 공유하지 마세요.");
-        send(sender, "§8비밀번호 재발급: §7/webmap 재설정");
+        send(sender, "§8비밀번호 변경: §7/webmap 변경 <새 비밀번호> §8· 재발급: §7/webmap 재설정");
+        return true;
+    }
+
+    static boolean isValidPassword(String password) {
+        if (password == null || password.length() < 4 || password.length() > 32) {
+            return false;
+        }
+        for (int i = 0; i < password.length(); i++) {
+            if (Character.isWhitespace(password.charAt(i))) {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -65,7 +91,7 @@ public final class WebmapCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             String lower = args[0].toLowerCase(Locale.ROOT);
             List<String> out = new java.util.ArrayList<>();
-            for (String option : Arrays.asList("pw", "password", "재설정")) {
+            for (String option : Arrays.asList("pw", "password", "변경", "재설정")) {
                 if (option.toLowerCase(Locale.ROOT).startsWith(lower)) {
                     out.add(option);
                 }

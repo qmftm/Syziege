@@ -66,9 +66,16 @@
     font-family: ui-monospace, Menlo, monospace; }
   #userbar { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   #userbar .who { color: #8a90a0; font-size: 12px; }
-  #logout { background: #2b3040; color: #e8eaf0; border: 1px solid #3a3f4e; border-radius: 6px;
+  #userbar button { background: #2b3040; color: #e8eaf0; border: 1px solid #3a3f4e; border-radius: 6px;
     padding: 3px 9px; cursor: pointer; font-size: 12px; }
-  #logout:hover { background: #343b4e; }
+  #userbar button:hover { background: #343b4e; }
+  #pwform { display: none; flex-direction: column; gap: 6px; margin-top: 8px; }
+  #pwform.show { display: flex; }
+  #pwform input { background: #232733; color: #e8eaf0; border: 1px solid #3a3f4e;
+    border-radius: 6px; padding: 5px 8px; font: inherit; }
+  #pwform button { background: #ffd75e; color: #241f00; border: none; border-radius: 6px;
+    padding: 5px; font: inherit; font-weight: 600; cursor: pointer; }
+  #pwMsg { font-size: 11.5px; min-height: 14px; color: #8a90a0; }
 </style>
 </head>
 <body>
@@ -100,7 +107,19 @@
   <hr class="sep">
   <div class="head" id="playersHead">접속자</div>
   <div id="players"></div>
-  <div id="userbar"><span class="who" id="who"></span><button id="logout">로그아웃</button></div>
+  <div id="userbar">
+    <span class="who" id="who"></span>
+    <span style="display:flex;gap:6px">
+      <button id="changePw" title="비밀번호 변경">🔑</button>
+      <button id="logout">로그아웃</button>
+    </span>
+  </div>
+  <form id="pwform" autocomplete="off">
+    <input type="password" id="pwCur" placeholder="현재 비밀번호" autocomplete="current-password">
+    <input type="password" id="pwNew" placeholder="새 비밀번호 (4~32자)" autocomplete="new-password">
+    <button type="submit">변경</button>
+    <div id="pwMsg"></div>
+  </form>
 </div>
 
 <div class="panel" id="legend">
@@ -182,6 +201,36 @@
       showLogin();
     });
   };
+
+  /* ---------- change password ---------- */
+  var pwForm = document.getElementById('pwform');
+  var pwMsg = document.getElementById('pwMsg');
+  document.getElementById('changePw').onclick = function () {
+    pwForm.classList.toggle('show');
+    pwMsg.textContent = '';
+    if (pwForm.classList.contains('show')) { document.getElementById('pwCur').focus(); }
+  };
+  pwForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    pwMsg.style.color = '#8a90a0';
+    pwMsg.textContent = '';
+    fetch('/api/password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current: document.getElementById('pwCur').value,
+        'new': document.getElementById('pwNew').value
+      })
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+    }).then(function (res) {
+      if (!res.ok) { pwMsg.style.color = '#e88'; pwMsg.textContent = res.body.error || '변경 실패'; return; }
+      pwMsg.style.color = '#7ec97e';
+      pwMsg.textContent = '비밀번호를 변경했습니다.';
+      document.getElementById('pwCur').value = '';
+      document.getElementById('pwNew').value = '';
+      setTimeout(function () { pwForm.classList.remove('show'); }, 1200);
+    }).catch(function () { pwMsg.style.color = '#e88'; pwMsg.textContent = '서버에 연결할 수 없습니다.'; });
+  });
 })();
 </script>
 </body>

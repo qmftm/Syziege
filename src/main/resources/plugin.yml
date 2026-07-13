@@ -24,7 +24,7 @@ commands:
   webmap:
     description: 웹 지도 로그인 비밀번호 확인
     permission: syziege.webmap
-    usage: /<command> [pw|재설정]
+    usage: /<command> [pw|변경 <비밀번호>|재설정]
 
 permissions:
   syziege.admin:

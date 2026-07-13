@@ -168,6 +168,10 @@ public final class WebServer {
             sendJson(exchange, 200, "{}");
             return;
         }
+        if (path.equals("/api/password")) {
+            handleChangePassword(exchange);
+            return;
+        }
         if (!path.startsWith("/api/admin/")) {
             send(exchange, 404, "text/plain", "Not Found".getBytes(StandardCharsets.UTF_8));
             return;
@@ -280,6 +284,41 @@ public final class WebServer {
                 SESSION_COOKIE + "=" + token + "; Path=/; HttpOnly; Max-Age=604800; SameSite=Lax");
         UUID uuid = auth.sessionUser(token);
         sendJson(exchange, 200, "{\"name\":" + jsonString(auth.nameOf(uuid)) + "}");
+    }
+
+    private void handleChangePassword(HttpExchange exchange) throws IOException {
+        UUID uuid = auth.sessionUser(sessionToken(exchange));
+        if (uuid == null) {
+            sendJson(exchange, 401, "{\"error\":\"login required\"}");
+            return;
+        }
+        Map<String, Object> body = readJsonBody(exchange);
+        if (body == null) {
+            sendJson(exchange, 400, "{\"error\":\"invalid JSON body\"}");
+            return;
+        }
+        String next = asString(body.get("new"));
+        if (!isValidPassword(next)) {
+            sendJson(exchange, 400, "{\"error\":\"비밀번호는 공백 없이 4~32자여야 합니다\"}");
+            return;
+        }
+        if (!auth.changePassword(uuid, asString(body.get("current")), next)) {
+            sendJson(exchange, 400, "{\"error\":\"현재 비밀번호가 올바르지 않습니다\"}");
+            return;
+        }
+        sendJson(exchange, 200, "{}");
+    }
+
+    private static boolean isValidPassword(String password) {
+        if (password == null || password.length() < 4 || password.length() > 32) {
+            return false;
+        }
+        for (int i = 0; i < password.length(); i++) {
+            if (Character.isWhitespace(password.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void serveSession(HttpExchange exchange) throws IOException {
