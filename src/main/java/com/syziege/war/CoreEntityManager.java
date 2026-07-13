@@ -16,7 +16,8 @@ import java.util.UUID;
 
 /**
  * Spawns and tracks each region core as an invisible, AI-less slime that
- * players hit to contest the core. The slimes are non-persistent and are
+ * players hit to contest the core. Core slimes exist only during war time;
+ * outside war they are removed. The slimes are non-persistent and are
  * respawned by a periodic sweep whenever their chunk is loaded, so they never
  * pile up across restarts.
  */
@@ -26,13 +27,15 @@ public final class CoreEntityManager {
 
     private final Plugin plugin;
     private final RegionStore regions;
+    private final WarSchedule warSchedule;
     private final Map<String, UUID> byType = new HashMap<>();
     private final Map<UUID, String> byEntity = new HashMap<>();
     private BukkitTask task;
 
-    public CoreEntityManager(Plugin plugin, RegionStore regions) {
+    public CoreEntityManager(Plugin plugin, RegionStore regions, WarSchedule warSchedule) {
         this.plugin = plugin;
         this.regions = regions;
+        this.warSchedule = warSchedule;
     }
 
     public void start() {
@@ -52,8 +55,15 @@ public final class CoreEntityManager {
         return CORE_TAG + "-" + typeId;
     }
 
-    /** Ensures a slime exists for every core, and clears cores that are gone. */
+    /**
+     * During war time, ensures a slime exists for every core and clears cores
+     * that are gone; outside war time, removes all core slimes.
+     */
     public synchronized void spawnAll() {
+        if (!warSchedule.active()) {
+            removeAll();
+            return;
+        }
         for (String typeId : regions.coreTypeIds()) {
             RegionStore.Core core = regions.getCore(typeId);
             if (core != null) {
@@ -69,11 +79,11 @@ public final class CoreEntityManager {
         });
     }
 
-    /** Respawns the slime for a core that was just placed or moved. */
+    /** Respawns the slime for a core that was just placed or moved (war time only). */
     public synchronized void onCoreMoved(String typeId) {
         despawn(typeId);
         RegionStore.Core core = regions.getCore(typeId);
-        if (core != null) {
+        if (core != null && warSchedule.active()) {
             ensure(typeId, core);
         }
     }

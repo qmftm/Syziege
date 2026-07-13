@@ -209,6 +209,7 @@ public final class CoreCombatListener implements Listener {
                 Bukkit.getServer().sendMessage(LEGACY.deserialize(active
                         ? "§c§l⚔ 전쟁이 시작되었습니다! 코어를 점령하세요!"
                         : "§a전쟁이 종료되었습니다. 다음 전쟁 시간까지 점령이 잠깁니다."));
+                coreEntities.spawnAll(); // spawn cores at war start, remove them at war end
             }
         }
 

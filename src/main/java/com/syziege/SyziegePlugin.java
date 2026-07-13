@@ -55,8 +55,8 @@ public final class SyziegePlugin extends JavaPlugin implements Listener {
                 getLogger());
         regionStore.load();
 
-        coreEntities = new CoreEntityManager(this, regionStore);
         warSchedule = new WarSchedule(getConfig().getConfigurationSection("war"), getLogger());
+        coreEntities = new CoreEntityManager(this, regionStore, warSchedule);
 
         NationCommand nationCommand = new NationCommand(nationStore);
         getCommand("국가").setExecutor(nationCommand);
